@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { parseGitHubRepoInput } from "@/lib/parse-github-repo";
 
 const EXAMPLES = [
@@ -107,12 +108,19 @@ export function ReversePromptHome({
             <span className="text-zinc-900">Git</span>
             <span className="text-[#d31611]">Reverse</span>
           </span>
-          <a
-            href="https://github.com/filiksyos/gitreverse"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-2 font-semibold text-zinc-900 transition-transform hover:-translate-y-0.5"
-          >
+          <div className="flex items-center gap-4">
+            <Link
+              href="/library"
+              className="font-semibold text-zinc-900 transition-transform hover:-translate-y-0.5"
+            >
+              Library
+            </Link>
+            <a
+              href="https://github.com/filiksyos/gitreverse"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 font-semibold text-zinc-900 transition-transform hover:-translate-y-0.5"
+            >
             <svg
               className="h-5 w-5 shrink-0"
               viewBox="0 0 98 96"
@@ -127,7 +135,8 @@ export function ReversePromptHome({
               />
             </svg>
             GitHub
-          </a>
+            </a>
+          </div>
         </div>
       </nav>
 
