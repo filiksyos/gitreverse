@@ -6,7 +6,8 @@ import { parseGitHubRepoInput } from "@/lib/parse-github-repo";
 import { getSupabase } from "@/lib/supabase";
 
 const README_MAX_CHARS = 8000;
-const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
+const GOOGLE_AI_STUDIO_URL =
+  "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
 
 const inFlight = new Map<string, Promise<{ prompt: string } | NextResponse>>();
 
@@ -53,7 +54,7 @@ function cacheTtlHours(): number {
   return Number.isFinite(n) && n > 0 ? n : 24;
 }
 
-function extractOpenRouterMessage(data: unknown): string | null {
+function extractMessage(data: unknown): string | null {
   if (!data || typeof data !== "object") return null;
   const choices = (data as { choices?: unknown }).choices;
   if (!Array.isArray(choices) || choices.length === 0) return null;
@@ -101,13 +102,17 @@ export async function POST(request: NextRequest) {
   }
 
   const { owner, repo } = parsed;
-  const apiKey = process.env.OPENROUTER_API_KEY?.trim();
+
+  const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim();
   if (!apiKey) {
     return NextResponse.json(
-      { error: "OPENROUTER_API_KEY is not configured." },
+      { error: "GOOGLE_GENERATIVE_AI_API_KEY is not configured." },
       { status: 500 }
     );
   }
+
+  const model =
+    process.env.GOOGLE_AI_STUDIO_MODEL?.trim() || "gemini-2.5-pro";
 
   const key = `${owner}/${repo}`;
   const existing = inFlight.get(key);
@@ -117,9 +122,6 @@ export async function POST(request: NextRequest) {
       ? out
       : NextResponse.json({ prompt: out.prompt }, { status: 200 });
   }
-
-  const model =
-    process.env.OPENROUTER_MODEL?.trim() || "google/gemini-2.5-pro";
 
   const promise = (async () => {
     const supabase = getSupabase();
@@ -140,7 +142,7 @@ export async function POST(request: NextRequest) {
           }
         }
       } catch {
-        // cache miss — continue to GitHub + OpenRouter
+        // cache miss — continue to GitHub + LLM
       }
     }
 
@@ -186,7 +188,7 @@ export async function POST(request: NextRequest) {
 
     let res: Response;
     try {
-      res = await fetch(OPENROUTER_URL, {
+      res = await fetch(GOOGLE_AI_STUDIO_URL, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${apiKey}`,
@@ -201,7 +203,8 @@ export async function POST(request: NextRequest) {
         }),
       });
     } catch (e) {
-      const message = e instanceof Error ? e.message : "OpenRouter request failed";
+      const message =
+        e instanceof Error ? e.message : "Google AI Studio request failed";
       return NextResponse.json(
         { error: `Generation failed: ${message}` },
         { status: 500 }
@@ -213,7 +216,7 @@ export async function POST(request: NextRequest) {
       data = await res.json();
     } catch {
       return NextResponse.json(
-        { error: "OpenRouter returned invalid JSON." },
+        { error: "Google AI Studio returned invalid JSON." },
         { status: 502 }
       );
     }
@@ -222,7 +225,7 @@ export async function POST(request: NextRequest) {
       const errObj = data as { error?: { message?: string } };
       const msg =
         errObj?.error?.message ??
-        `OpenRouter error ${res.status}: ${JSON.stringify(data).slice(0, 300)}`;
+        `Google AI Studio error ${res.status}: ${JSON.stringify(data).slice(0, 300)}`;
       const lower = msg.toLowerCase();
       const isAuth =
         res.status === 401 ||
@@ -231,14 +234,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error: isAuth
-            ? `OpenRouter authentication failed. Check OPENROUTER_API_KEY in .env.local.`
+            ? "Google AI Studio authentication failed. Check GOOGLE_GENERATIVE_AI_API_KEY in .env.local."
             : `Generation failed: ${msg}`,
         },
-        { status: isAuth ? 401 : res.status >= 400 && res.status < 600 ? res.status : 502 }
+        {
+          status: isAuth ? 401 : res.status >= 400 && res.status < 600 ? res.status : 502,
+        }
       );
     }
 
-    const prompt = extractOpenRouterMessage(data);
+    const prompt = extractMessage(data);
     if (!prompt) {
       return NextResponse.json(
         { error: "Model did not return a usable text response." },
