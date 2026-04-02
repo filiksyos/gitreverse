@@ -5,9 +5,10 @@ import { parseGitHubRepoInput } from "@/lib/parse-github-repo";
 
 const EXAMPLES = [
   { label: "Next.js", url: "https://github.com/vercel/next.js" },
-  { label: "Shadcn", url: "https://github.com/shadcn-ui/ui" },
+  { label: "Openclaw", url: "https://github.com/openclaw/openclaw" },
   { label: "React", url: "https://github.com/facebook/react" },
   { label: "Supabase", url: "https://github.com/supabase/supabase" },
+  { label: "Linux", url: "https://github.com/torvalds/linux" },
 ] as const;
 
 type ReversePromptHomeProps = {
@@ -99,7 +100,7 @@ export function ReversePromptHome({
   }
 
   return (
-    <div className="min-h-screen bg-[#FFFDF8] text-zinc-900">
+    <div className="flex min-h-screen flex-col bg-[#FFFDF8] text-zinc-900">
       <nav className="sticky top-0 z-50 border-b-[3px] border-zinc-900 bg-[#FFFDF8]">
         <div className="mx-auto flex h-16 max-w-4xl items-center justify-between px-4 sm:px-6">
           <span className="text-xl font-bold tracking-tight">
@@ -130,7 +131,7 @@ export function ReversePromptHome({
         </div>
       </nav>
 
-      <main className="mx-auto flex max-w-4xl flex-col items-center gap-12 px-4 py-12 sm:px-6">
+      <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col items-center gap-12 px-4 py-12 sm:px-6">
         <div className="flex w-full flex-col items-center gap-6">
           <div className="relative flex w-full flex-col items-center text-center">
             <svg
@@ -306,6 +307,33 @@ export function ReversePromptHome({
           </div>
         ) : null}
       </main>
+
+      <footer className="border-t border-zinc-200 py-6 text-center text-sm text-zinc-500">
+        <p className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
+          <span className="inline-flex flex-wrap items-center justify-center gap-x-1">
+            Built by{" "}
+            <a
+              href="https://x.com/filiksyos"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-zinc-700 underline decoration-zinc-400 underline-offset-2 transition-colors hover:text-zinc-900"
+            >
+              Fili
+            </a>
+          </span>
+          <span className="inline-flex flex-wrap items-center justify-center gap-x-1">
+            also building{" "}
+            <a
+              href="https://gitmvp.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-zinc-700 underline decoration-zinc-400 underline-offset-2 transition-colors hover:text-zinc-900"
+            >
+              GitMVP
+            </a>
+          </span>
+        </p>
+      </footer>
     </div>
   );
 }
