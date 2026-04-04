@@ -15,11 +15,13 @@ const EXAMPLES = [
 type ReversePromptHomeProps = {
   initialRepoInput?: string;
   autoSubmit?: boolean;
+  initialPrompt?: string;
 };
 
 export function ReversePromptHome({
   initialRepoInput = "",
   autoSubmit = false,
+  initialPrompt,
 }: ReversePromptHomeProps) {
   const [repoUrl, setRepoUrl] = useState(initialRepoInput);
   const [loading, setLoading] = useState(false);
@@ -30,7 +32,7 @@ export function ReversePromptHome({
     null
   );
   const [byokApiKey, setByokApiKey] = useState("");
-  const [prompt, setPrompt] = useState("");
+  const [prompt, setPrompt] = useState(initialPrompt ?? "");
   const [copied, setCopied] = useState(false);
   const resultsRef = useRef<HTMLDivElement | null>(null);
   const autoSubmitStartedRef = useRef(false);
