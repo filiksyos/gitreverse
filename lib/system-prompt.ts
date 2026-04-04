@@ -21,6 +21,7 @@ You are given **repository metadata**, a **root file tree** (depth 1), and the *
 - Dumping framework jargon, exact package names, or folder structure unless the README clearly shows the user cared about that.
 - Writing agent *system* instructions, markdown specs, or pseudo-code blocks.
 - Inventing features that are not supported by the evidence in the context.
+- **Anonymize file names.** Do not use the exact file or directory names from the repository. Replace them with generic equivalents that describe the purpose (e.g. `systemd.c` → `service_manager.c`, `shell.c` → `cli.c`).
 
 ## Context you can assume about tools
 
