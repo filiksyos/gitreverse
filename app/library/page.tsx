@@ -20,14 +20,18 @@ export default async function LibraryRoute() {
     repo: string;
     prompt: string;
     cached_at: string;
+    search_count?: number;
+    views?: number;
   }[] = [];
   let initialTotal = 0;
 
   if (supabase) {
     const { data, count } = await supabase
       .from("prompt_cache")
-      .select("id, owner, repo, prompt, cached_at", { count: "exact" })
-      .order("cached_at", { ascending: false })
+      .select("id, owner, repo, prompt, cached_at, search_count, views", {
+        count: "exact",
+      })
+      .order("views", { ascending: false })
       .range(0, INITIAL_LIMIT - 1);
 
     initialData = (data ?? []) as typeof initialData;

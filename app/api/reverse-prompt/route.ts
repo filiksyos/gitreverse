@@ -200,6 +200,7 @@ export async function POST(request: NextRequest) {
 
   const promise = (async () => {
     const supabase = getSupabase();
+    let staleFallback: string | null = null;
     if (supabase) {
       try {
         const ttlHours = cacheTtlHours();
@@ -213,8 +214,14 @@ export async function POST(request: NextRequest) {
           const ageHours =
             (Date.now() - new Date(data.cached_at).getTime()) / 36e5;
           if (ageHours < ttlHours) {
+            void supabase.rpc("increment_search_count", {
+              p_owner: owner,
+              p_repo: repo,
+            });
             return { prompt: data.prompt as string };
           }
+          // stale entry — keep as fallback in case LLM is unavailable
+          staleFallback = data.prompt as string;
         }
       } catch {
         // cache miss — continue to GitHub + LLM
@@ -327,6 +334,9 @@ export async function POST(request: NextRequest) {
         isExhaustedCreditsOrQuotaMessage(msg);
 
       if (creditsExhausted) {
+        if (staleFallback) {
+          return { prompt: staleFallback };
+        }
         if (!userKey) {
           return NextResponse.json(
             {
@@ -394,6 +404,7 @@ export async function POST(request: NextRequest) {
             );
           }
         });
+      void sb.rpc("increment_search_count", { p_owner: owner, p_repo: repo });
     }
 
     return { prompt };
