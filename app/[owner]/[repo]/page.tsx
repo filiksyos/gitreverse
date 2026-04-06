@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
+import { headers } from "next/headers";
 import { ReversePromptHome } from "@/components/reverse-prompt-home";
-import { isHomeExampleRepo } from "@/lib/home-example-repos";
 import { isValidGitHubRepoPath, normalizeRepoSegment } from "@/lib/parse-github-repo";
 import { getSupabase } from "@/lib/supabase";
 
@@ -26,14 +26,18 @@ export default async function RepoPage({ params }: PageProps) {
   try {
     const supabase = getSupabase();
     if (supabase) {
-      if (!isHomeExampleRepo(owner, repoNorm)) {
-        const { error: viewsError } = await supabase.rpc("increment_views", {
-          p_owner: owner,
-          p_repo: repoNorm,
-        });
-        if (viewsError) {
-          console.warn("[repo-page] increment_views:", viewsError.message);
-        }
+      const hdrs = await headers();
+      const ip =
+        hdrs.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+        hdrs.get("x-real-ip") ??
+        "unknown";
+      const { error: viewsError } = await supabase.rpc("increment_views", {
+        p_owner: owner,
+        p_repo: repoNorm,
+        p_ip: ip,
+      });
+      if (viewsError) {
+        console.warn("[repo-page] increment_views:", viewsError.message);
       }
       const { data } = await supabase
         .from("prompt_cache")
