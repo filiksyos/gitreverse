@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { HOME_EXAMPLES } from "@/lib/home-example-repos";
 import { parseGitHubRepoInput } from "@/lib/parse-github-repo";
+import { generateFingerprint } from "@/lib/fingerprint";
 
 type ReversePromptHomeProps = {
   initialRepoInput?: string;
@@ -25,12 +26,87 @@ export function ReversePromptHome({
   const resultsRef = useRef<HTMLDivElement | null>(null);
   const autoSubmitStartedRef = useRef(false);
 
+  /* Deep Reverse state */
+  const [deepMode, setDeepMode] = useState(false);
+  const [deepEligible, setDeepEligible] = useState(false);
+  const [deepRemaining, setDeepRemaining] = useState(0);
+  const [deepProgress, setDeepProgress] = useState<string | null>(null);
+  const [isDeepResult, setIsDeepResult] = useState(false);
+  const fingerprintRef = useRef<string | null>(null);
+
+  /* Resolve fingerprint + check deep reverse eligibility on mount */
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const fp = await generateFingerprint();
+        fingerprintRef.current = fp;
+        const res = await fetch("/api/deep-reverse", {
+          headers: { "X-Fingerprint": fp },
+        });
+        if (!res.ok || cancelled) return;
+        const data = (await res.json()) as { eligible: boolean; remaining: number };
+        if (cancelled) return;
+        setDeepEligible(data.eligible);
+        setDeepRemaining(data.remaining);
+      } catch {
+        /* silently fail — deep reverse just stays hidden */
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  /* Restore last deep reverse result from localStorage on mount */
+  useEffect(() => {
+    if (initialPrompt || prompt) return;
+    try {
+      const saved = localStorage.getItem("deepReverseResult");
+      if (!saved) return;
+      const { repo: savedRepo, prompt: savedPrompt } = JSON.parse(saved) as {
+        repo: string;
+        prompt: string;
+      };
+      if (savedRepo && savedPrompt) {
+        setRepoUrl(savedRepo);
+        setPrompt(savedPrompt);
+        setIsDeepResult(true);
+      }
+    } catch {
+      /* corrupt localStorage — ignore */
+    }
+  }, []);
+
+  function saveDeepResult(input: string, deepPrompt: string) {
+    try {
+      localStorage.setItem(
+        "deepReverseResult",
+        JSON.stringify({ repo: input, prompt: deepPrompt })
+      );
+    } catch {
+      /* storage full or unavailable — ignore */
+    }
+  }
+
+  function pushRepoUrl(input: string) {
+    const parsed = parseGitHubRepoInput(input);
+    if (parsed && typeof window !== "undefined") {
+      window.history.replaceState(
+        null,
+        "",
+        `/${encodeURIComponent(parsed.owner)}/${encodeURIComponent(parsed.repo)}`
+      );
+    }
+  }
+
+  /** Standard reverse prompt (existing logic). */
   const runReversePrompt = useCallback(async (input: string) => {
     setError(null);
     setRateLimited(false);
     setPrompt("");
     setCopied(false);
     setLoading(true);
+    setDeepProgress(null);
+    setIsDeepResult(false);
     try {
       const res = await fetch("/api/reverse-prompt", {
         method: "POST",
@@ -51,14 +127,7 @@ export function ReversePromptHome({
       }
       if (typeof data.prompt === "string") {
         setPrompt(data.prompt);
-        const parsed = parseGitHubRepoInput(input);
-        if (parsed && typeof window !== "undefined") {
-          window.history.replaceState(
-            null,
-            "",
-            `/${encodeURIComponent(parsed.owner)}/${encodeURIComponent(parsed.repo)}`
-          );
-        }
+        pushRepoUrl(input);
       } else {
         setError("No prompt in response.");
       }
@@ -69,9 +138,136 @@ export function ReversePromptHome({
     }
   }, []);
 
+  /** Deep reverse via SSE stream. */
+  const deepReverseRef = useRef<(input: string) => Promise<void>>(null);
+  const runDeepReverse = useCallback(async (input: string) => {
+    setError(null);
+    setRateLimited(false);
+    setPrompt("");
+    setCopied(false);
+    setLoading(true);
+    setDeepProgress("Starting deep analysis…");
+
+    const fp = fingerprintRef.current;
+    if (!fp) {
+      setError("Could not generate browser fingerprint.");
+      setLoading(false);
+      setDeepProgress(null);
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/deep-reverse", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Fingerprint": fp,
+        },
+        body: JSON.stringify({ repoUrl: input }),
+      });
+
+      /* Non-streaming responses (cached result, errors, 202 in-flight) */
+      const ct = res.headers.get("content-type") ?? "";
+      if (!ct.includes("text/event-stream")) {
+        const data = (await res.json()) as {
+          prompt?: string;
+          cached?: boolean;
+          error?: string;
+          status?: string;
+          retryAfter?: number;
+          remaining?: number;
+        };
+        if (data.prompt) {
+          setPrompt(data.prompt);
+          setIsDeepResult(true);
+          setDeepProgress(null);
+          pushRepoUrl(input);
+          return;
+        }
+        if (data.status === "processing") {
+          setDeepProgress("Another user is analyzing this repo — waiting…");
+          /* Retry after a delay */
+          setTimeout(() => void deepReverseRef.current?.(input), (data.retryAfter ?? 5) * 1000);
+          return;
+        }
+        if (res.status === 429) {
+          setError("You've reached the limit of 3 deep analyses per week.");
+          setDeepRemaining(0);
+          setDeepProgress(null);
+          return;
+        }
+        if (res.status === 403 && data.error === "deep_reverse_not_available") {
+          setError("Deep reverse is not available for your session yet.");
+          setDeepProgress(null);
+          return;
+        }
+        setError(data.error ?? `Request failed (${res.status})`);
+        setDeepProgress(null);
+        return;
+      }
+
+      /* SSE stream processing */
+      const reader = res.body?.getReader();
+      if (!reader) {
+        setError("Failed to read response stream.");
+        setDeepProgress(null);
+        return;
+      }
+
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+
+        let currentEvent = "";
+        for (const line of lines) {
+          if (line.startsWith("event: ")) {
+            currentEvent = line.slice(7).trim();
+          } else if (line.startsWith("data: ") && currentEvent) {
+            try {
+              const payload = JSON.parse(line.slice(6)) as Record<string, unknown>;
+              if (currentEvent === "progress") {
+                setDeepProgress(payload.message as string);
+              } else if (currentEvent === "complete") {
+                setPrompt(payload.prompt as string);
+                setIsDeepResult(true);
+                setDeepProgress(null);
+                setDeepRemaining((prev) => Math.max(0, prev - 1));
+                pushRepoUrl(input);
+              } else if (currentEvent === "error") {
+                setError(payload.message as string);
+                setDeepProgress(null);
+              }
+            } catch {
+              /* malformed SSE data line */
+            }
+            currentEvent = "";
+          }
+        }
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Deep reverse failed");
+      setDeepProgress(null);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+  deepReverseRef.current = runDeepReverse;
+
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    void runReversePrompt(repoUrl.trim());
+    const trimmed = repoUrl.trim();
+    if (deepMode) {
+      void runDeepReverse(trimmed);
+    } else {
+      void runReversePrompt(trimmed);
+    }
   }
 
   useEffect(() => {
@@ -287,6 +483,90 @@ export function ReversePromptHome({
                 ))}
               </div>
 
+              {/* Deep Reverse toggle */}
+              {deepEligible ? (
+                <div className="mt-4 flex items-center justify-between rounded-lg border-[3px] border-zinc-300 bg-[#fafafa] px-4 py-3">
+                  <div className="flex flex-col gap-0.5">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-sm font-semibold text-zinc-800">
+                        Deep Reverse
+                      </span>
+                      {(() => {
+                        const parsed = parseGitHubRepoInput(repoUrl);
+                        if (!parsed) return null;
+                        return (
+                          <a
+                            href={`https://deepwiki.com/${encodeURIComponent(parsed.owner)}/${encodeURIComponent(parsed.repo)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 rounded border border-zinc-300 bg-white px-1.5 py-0.5 text-[10px] font-medium text-zinc-500 transition-colors hover:border-zinc-400 hover:text-zinc-700"
+                            title="Index this repo on DeepWiki for better results"
+                          >
+                            <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                              <polyline points="15 3 21 3 21 9" />
+                              <line x1="10" y1="14" x2="21" y2="3" />
+                            </svg>
+                            DeepWiki
+                          </a>
+                        );
+                      })()}
+                    </div>
+                    <span className="text-xs text-zinc-500">
+                      Detailed prompt via DeepWiki analysis
+                      {deepRemaining > 0
+                        ? ` · ${deepRemaining} left this week`
+                        : " · limit reached · cached results still available"}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={deepMode}
+                    onClick={() => setDeepMode((v) => !v)}
+                    className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border-[2px] border-zinc-900 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900 focus-visible:ring-offset-2 ${
+                      deepMode ? "bg-[#d31611]" : "bg-zinc-300"
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${
+                        deepMode ? "translate-x-5" : "translate-x-0.5"
+                      }`}
+                    />
+                  </button>
+                </div>
+              ) : null}
+
+              {/* Deep Reverse progress indicator */}
+              {deepProgress ? (
+                <div className="mt-3 flex items-center gap-2 rounded-lg border-[3px] border-blue-300 bg-blue-50 px-4 py-3">
+                  <svg
+                    className="h-4 w-4 shrink-0 animate-spin text-blue-600"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    aria-hidden
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    />
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    />
+                  </svg>
+                  <span className="text-sm font-medium text-blue-800">
+                    {deepProgress}
+                  </span>
+                </div>
+              ) : null}
+
               {rateLimited ? (
                 <div className="mt-4 rounded-lg border-[3px] border-amber-400 bg-amber-50 p-4" role="alert">
                   <p className="font-semibold text-amber-900">Sorry, we&apos;re a bit overwhelmed right now.</p>
@@ -334,7 +614,7 @@ export function ReversePromptHome({
             <section className="relative z-10 rounded-xl border-[3px] border-zinc-900 bg-[#fafafa] p-6">
               <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                 <h2 className="text-sm font-semibold text-zinc-700">
-                  Reverse engineered prompt
+                  {isDeepResult ? "Deep reverse engineered prompt" : "Reverse engineered prompt"}
                 </h2>
                 <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
                   {reverseEngineeredRepo ? (

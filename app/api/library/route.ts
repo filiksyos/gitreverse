@@ -8,6 +8,15 @@ const LIMIT = 24;
 
 type SortOption = "trending" | "newest" | "oldest";
 
+interface PromptRow {
+  id: number;
+  owner: string;
+  repo: string;
+  prompt: string;
+  cached_at: string;
+  views?: number;
+}
+
 export async function GET(req: NextRequest) {
   const supabase = getSupabase();
   if (!supabase) {
@@ -56,5 +65,33 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ data: data ?? [], total: count ?? 0 });
+  const rows = (data ?? []) as PromptRow[];
+
+  /* Overlay deep prompts where available (best-effort) */
+  if (rows.length > 0) {
+    try {
+      const orFilter = rows
+        .map((r) => `and(owner.eq.${r.owner},repo.eq.${r.repo})`)
+        .join(",");
+      const { data: deepRows } = await supabase
+        .from("deep_prompt_cache")
+        .select("owner, repo, prompt")
+        .or(orFilter);
+
+      if (deepRows && deepRows.length > 0) {
+        const deepMap = new Map<string, string>();
+        for (const d of deepRows as Array<{ owner: string; repo: string; prompt: string }>) {
+          deepMap.set(`${d.owner}/${d.repo}`, d.prompt);
+        }
+        for (const row of rows) {
+          const deepPrompt = deepMap.get(`${row.owner}/${row.repo}`);
+          if (deepPrompt) row.prompt = deepPrompt;
+        }
+      }
+    } catch {
+      /* deep_prompt_cache may not exist yet — ignore */
+    }
+  }
+
+  return NextResponse.json({ data: rows, total: count ?? 0 });
 }
