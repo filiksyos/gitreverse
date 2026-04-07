@@ -4,42 +4,15 @@ import { getFileTree, getReadme, getRepoMeta } from "@/lib/github-client";
 import { formatAsFilteredTree } from "@/lib/file-tree-formatter";
 import { parseGitHubRepoInput } from "@/lib/parse-github-repo";
 import { getSupabase } from "@/lib/supabase";
+import {
+  type LlmTarget,
+  resolveLlmTarget,
+  extractProviderErrorMessage,
+  extractMessage,
+  buildLlmHeaders,
+} from "@/lib/llm-client";
 
 const README_MAX_CHARS = 8000;
-const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
-const GOOGLE_AI_STUDIO_URL =
-  "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
-
-type LlmTarget =
-  | { provider: "openrouter"; url: string; apiKey: string; model: string }
-  | { provider: "google"; url: string; apiKey: string; model: string };
-
-function resolveLlmTarget(): LlmTarget | { error: string } {
-  const openRouterKey = process.env.OPENROUTER_API_KEY?.trim();
-  if (openRouterKey) {
-    return {
-      provider: "openrouter",
-      url: OPENROUTER_URL,
-      apiKey: openRouterKey,
-      model:
-        process.env.OPENROUTER_MODEL?.trim() || "google/gemini-2.5-pro",
-    };
-  }
-  const googleKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim();
-  if (googleKey) {
-    return {
-      provider: "google",
-      url: GOOGLE_AI_STUDIO_URL,
-      apiKey: googleKey,
-      model:
-        process.env.GOOGLE_AI_STUDIO_MODEL?.trim() || "gemini-2.5-pro",
-    };
-  }
-  return {
-    error:
-      "No LLM API key configured. Set OPENROUTER_API_KEY (recommended) or GOOGLE_GENERATIVE_AI_API_KEY in .env.local.",
-  };
-}
 
 const inFlight = new Map<string, Promise<{ prompt: string } | NextResponse>>();
 
@@ -111,36 +84,6 @@ function isExhaustedCreditsOrQuotaMessage(msg: string): boolean {
   return false;
 }
 
-function extractProviderErrorMessage(data: unknown): string | null {
-  if (!data || typeof data !== "object") return null;
-  const err = (data as { error?: unknown }).error;
-  if (typeof err === "string" && err.trim()) return err.trim();
-  if (err && typeof err === "object" && "message" in err) {
-    const m = (err as { message?: unknown }).message;
-    if (typeof m === "string" && m.trim()) return m.trim();
-  }
-  return null;
-}
-
-function extractMessage(data: unknown): string | null {
-  if (!data || typeof data !== "object") return null;
-  const choices = (data as { choices?: unknown }).choices;
-  if (!Array.isArray(choices) || choices.length === 0) return null;
-  const first = choices[0] as { message?: { content?: unknown } };
-  const content = first.message?.content;
-  if (typeof content === "string") return content.trim();
-  if (Array.isArray(content)) {
-    const text = content
-      .map((part) =>
-        part && typeof part === "object" && "text" in part
-          ? String((part as { text: unknown }).text)
-          : ""
-      )
-      .join("");
-    return text.trim() || null;
-  }
-  return null;
-}
 
 export async function POST(request: NextRequest) {
   let body: { repoUrl?: string };
@@ -253,22 +196,11 @@ export async function POST(request: NextRequest) {
       tree.truncated
     );
 
-    const headers: Record<string, string> = {
-      Authorization: `Bearer ${llm.apiKey}`,
-      "Content-Type": "application/json",
-    };
-    if (llm.provider === "openrouter") {
-      const referer = process.env.OPENROUTER_HTTP_REFERER?.trim();
-      if (referer) headers["HTTP-Referer"] = referer;
-      const title = process.env.OPENROUTER_APP_TITLE?.trim();
-      if (title) headers["X-Title"] = title;
-    }
-
     let res: Response;
     try {
       res = await fetch(llm.url, {
         method: "POST",
-        headers,
+        headers: buildLlmHeaders(llm),
         body: JSON.stringify({
           model: llm.model,
           messages: [
