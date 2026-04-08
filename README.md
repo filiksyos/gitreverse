@@ -31,4 +31,4 @@ pnpm start
 pnpm lint
 ```
 
-Pull requests are appreciated!
+Shoutout to [GitIngest](https://gitingest.com) for inspiration.
