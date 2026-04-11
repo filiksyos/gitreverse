@@ -109,26 +109,14 @@ export function ReversePromptHome({
     if (!o || !r) return;
     if (isHomeExampleRepo(o, r)) return;
 
-    const key = `viewed__${o}__${r}`;
-    const existing = localStorage.getItem(key);
-    if (existing === "1" || existing === "pending") return;
-
-    localStorage.setItem(key, "pending");
+    /* Server-side dedupes by IP hash, so we no longer need a localStorage gate. */
     void fetch("/api/increment-views", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ owner: o, repo: r }),
-    })
-      .then((res) => {
-        if (!res.ok) {
-          localStorage.removeItem(key);
-          return;
-        }
-        localStorage.setItem(key, "1");
-      })
-      .catch(() => {
-        localStorage.removeItem(key);
-      });
+    }).catch(() => {
+      /* swallow — view counter is best-effort */
+    });
   }, [owner, repo]);
 
   useEffect(() => {
