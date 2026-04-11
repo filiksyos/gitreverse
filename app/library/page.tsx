@@ -30,7 +30,6 @@ export default async function LibraryRoute() {
     const { data, count } = await supabase
       .from("prompt_cache")
       .select("id, owner, repo, prompt, cached_at, views", { count: "exact" })
-      .order("views", { ascending: false })
       .order("cached_at", { ascending: false })
       .range(0, INITIAL_LIMIT - 1);
 

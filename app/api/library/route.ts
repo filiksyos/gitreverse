@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = req.nextUrl;
   const search = searchParams.get("search")?.trim() ?? "";
-  const sort = (searchParams.get("sort") ?? "trending") as SortOption;
+  const sort = (searchParams.get("sort") ?? "newest") as SortOption;
   const page = Math.max(0, parseInt(searchParams.get("page") ?? "0", 10));
   const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") ?? String(LIMIT), 10)));
 

@@ -127,6 +127,9 @@ config.local
 
 # Output of 'npm pack'
 *.tgz
+# env files (can opt-in for committing if needed)
+.env*
+!.env.example
 
 # Yarn
 .yarn/

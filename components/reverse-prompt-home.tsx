@@ -2,19 +2,39 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { HOME_EXAMPLES } from "@/lib/home-example-repos";
+import { HOME_EXAMPLES, isHomeExampleRepo } from "@/lib/home-example-repos";
 import { parseGitHubRepoInput } from "@/lib/parse-github-repo";
+
+const GITREVERSE_HISTORY_KEY = "gitreverse_history";
+const HISTORY_PROMPT_PREVIEW_LEN = 160;
+
+function historyPromptPreview(text: string): string {
+  const t = text.trim().replace(/\s+/g, " ");
+  if (t.length <= HISTORY_PROMPT_PREVIEW_LEN) return t;
+  return `${t.slice(0, HISTORY_PROMPT_PREVIEW_LEN).trimEnd()}…`;
+}
+
+type GitreverseHistoryEntry = {
+  owner: string;
+  repo: string;
+  visitedAt: string;
+  promptPreview?: string;
+};
 
 type ReversePromptHomeProps = {
   initialRepoInput?: string;
   autoSubmit?: boolean;
   initialPrompt?: string;
+  owner?: string;
+  repo?: string;
 };
 
 export function ReversePromptHome({
   initialRepoInput = "",
   autoSubmit = false,
   initialPrompt,
+  owner,
+  repo,
 }: ReversePromptHomeProps) {
   const [repoUrl, setRepoUrl] = useState(initialRepoInput);
   const [loading, setLoading] = useState(false);
@@ -83,6 +103,94 @@ export function ReversePromptHome({
   }, [autoSubmit, initialRepoInput, runReversePrompt]);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    const o = owner?.trim();
+    const r = repo?.trim();
+    if (!o || !r) return;
+    if (isHomeExampleRepo(o, r)) return;
+
+    const key = `viewed__${o}__${r}`;
+    const existing = localStorage.getItem(key);
+    if (existing === "1" || existing === "pending") return;
+
+    localStorage.setItem(key, "pending");
+    void fetch("/api/increment-views", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ owner: o, repo: r }),
+    })
+      .then((res) => {
+        if (!res.ok) {
+          localStorage.removeItem(key);
+          return;
+        }
+        localStorage.setItem(key, "1");
+      })
+      .catch(() => {
+        localStorage.removeItem(key);
+      });
+  }, [owner, repo]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const o = owner?.trim();
+    const r = repo?.trim();
+    if (!o || !r) return;
+
+    const MAX = 20;
+    const raw = localStorage.getItem(GITREVERSE_HISTORY_KEY);
+    let arr: GitreverseHistoryEntry[] = [];
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw) as unknown;
+        arr = Array.isArray(parsed) ? (parsed as GitreverseHistoryEntry[]) : [];
+      } catch {
+        arr = [];
+      }
+    }
+    const idx = arr.findIndex((e) => e.owner === o && e.repo === r);
+    const prevPreview = idx !== -1 ? arr[idx]?.promptPreview : undefined;
+    const entry: GitreverseHistoryEntry = {
+      owner: o,
+      repo: r,
+      visitedAt: new Date().toISOString(),
+      ...(prevPreview != null && prevPreview !== ""
+        ? { promptPreview: prevPreview }
+        : {}),
+    };
+    if (idx !== -1) arr.splice(idx, 1);
+    arr.unshift(entry);
+    localStorage.setItem(
+      GITREVERSE_HISTORY_KEY,
+      JSON.stringify(arr.slice(0, MAX))
+    );
+  }, [owner, repo]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const o = owner?.trim();
+    const r = repo?.trim();
+    const p = prompt.trim();
+    if (!o || !r || !p) return;
+
+    const preview = historyPromptPreview(p);
+    const raw = localStorage.getItem(GITREVERSE_HISTORY_KEY);
+    let arr: GitreverseHistoryEntry[] = [];
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw) as unknown;
+        arr = Array.isArray(parsed) ? (parsed as GitreverseHistoryEntry[]) : [];
+      } catch {
+        return;
+      }
+    }
+    const idx = arr.findIndex((e) => e.owner === o && e.repo === r);
+    if (idx === -1 || arr[idx].promptPreview === preview) return;
+    arr[idx] = { ...arr[idx], promptPreview: preview };
+    localStorage.setItem(GITREVERSE_HISTORY_KEY, JSON.stringify(arr));
+  }, [owner, repo, prompt]);
+
+  useEffect(() => {
     if (!prompt) return;
     const id = requestAnimationFrame(() => {
       resultsRef.current?.scrollIntoView({
@@ -124,26 +232,19 @@ export function ReversePromptHome({
             >
               Library
             </Link>
+            <Link
+              href="/history"
+              className="font-semibold text-zinc-900 transition-transform hover:-translate-y-0.5"
+            >
+              History
+            </Link>
             <a
               href="https://github.com/filiksyos/gitreverse"
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-2 font-semibold text-zinc-900 transition-transform hover:-translate-y-0.5"
+              className="font-semibold text-zinc-900 transition-transform hover:-translate-y-0.5"
             >
-            <svg
-              className="h-5 w-5 shrink-0"
-              viewBox="0 0 98 96"
-              xmlns="http://www.w3.org/2000/svg"
-              aria-hidden="true"
-            >
-              <path
-                fillRule="evenodd"
-                clipRule="evenodd"
-                d="M48.854 0C21.839 0 0 22 0 49.217c0 21.756 13.993 40.172 33.405 46.69 2.427.49 3.316-1.059 3.316-2.362 0-1.141-.08-5.096-.08-9.211-13.588 2.963-16.424-5.867-16.424-5.867-2.184-5.704-5.42-7.17-5.42-7.17-4.448-3.015.324-3.015.324-3.015 4.934.326 7.523 5.052 7.523 5.052 4.367 7.496 11.404 5.378 14.235 4.074.404-3.178 1.699-5.378 3.074-6.613-10.839-1.22-22.229-5.412-22.229-24.054 0-5.312 1.895-9.718 5.424-13.126-.526-1.324-2.356-6.74.505-14.052 0 0 4.432-1.505 14.5 5.008 4.172-1.095 8.73-1.63 13.168-1.656 4.469.026 8.971.561 13.166 1.656 10.06-6.513 14.48-5.008 14.48-5.008 2.866 7.326 1.052 12.728.53 14.052 3.532 3.408 5.414 7.814 5.414 13.126 0 18.728-11.401 22.813-22.285 23.985 1.772 1.514 3.316 4.539 3.316 9.119 0 6.613-.08 11.898-.08 13.526 0 1.304.878 2.853 3.316 2.364C84.974 89.385 98 70.983 98 49.204 98 22 76.038 0 48.854 0z"
-                fill="currentColor"
-              />
-            </svg>
-            GitHub
+              GitHub
             </a>
           </div>
         </div>
@@ -200,10 +301,9 @@ export function ReversePromptHome({
               Prompt
             </h1>
             <p className="mt-4 max-w-xl text-lg text-zinc-600">
-              Paste a public GitHub repo link or{" "}
-              <span className="whitespace-nowrap">owner/repo</span>. We&apos;ll
-              turn it into one plain-language &ldquo;vibe coding&rdquo; prompt
-              you could have used to build it.
+              Reverse engineer a codebase{" "}
+              into a prompt
+              that likely created it.
             </p>
           </div>
 
@@ -221,7 +321,7 @@ export function ReversePromptHome({
                     name="repoUrl"
                     autoComplete="off"
                     className="relative z-10 w-full rounded border-[3px] border-zinc-900 bg-white px-4 py-3 text-base text-zinc-900 placeholder-zinc-500 focus:outline-none"
-                    placeholder="https://github.com/… or owner/repo"
+                    placeholder="https://github.com/…"
                     value={repoUrl}
                     onChange={(e) => setRepoUrl(e.target.value)}
                     required
