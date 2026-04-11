@@ -301,10 +301,9 @@ export function ReversePromptHome({
               Prompt
             </h1>
             <p className="mt-4 max-w-xl text-lg text-zinc-600">
-              Paste a public GitHub repo link or{" "}
-              <span className="whitespace-nowrap">owner/repo</span>. We&apos;ll
-              turn it into one plain-language &ldquo;vibe coding&rdquo; prompt
-              you could have used to build it.
+              Reverse engineer a codebase{" "}
+              into a prompt
+              that likely created it.
             </p>
           </div>
 
@@ -322,7 +321,7 @@ export function ReversePromptHome({
                     name="repoUrl"
                     autoComplete="off"
                     className="relative z-10 w-full rounded border-[3px] border-zinc-900 bg-white px-4 py-3 text-base text-zinc-900 placeholder-zinc-500 focus:outline-none"
-                    placeholder="https://github.com/… or owner/repo"
+                    placeholder="https://github.com/…"
                     value={repoUrl}
                     onChange={(e) => setRepoUrl(e.target.value)}
                     required
