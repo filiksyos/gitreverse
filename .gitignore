@@ -1,71 +1,36 @@
-# Dependencies
-node_modules/
-
-# Build artifacts
+```
+# Compiled and build artifacts
+*.pyc
+__pycache__/
+*.o
+*.obj
 dist/
 build/
 target/
 
-# Python
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-*.py.class
-*.py.obj
-*.py.out
-*.py.dll
-*.py.so
-*.py.a
-*.py.o
-*.py.exe
-*.py.lib
-*.py.exp
-*.py.ilk
-*.py.pdb
-*.py.nm
-*.py.map
-*.py.dSYM/
-*.py.d/
-*.py.class
-*.py.obj
-*.py.out
-*.py.dll
-*.py.so
-*.py.a
-*.py.o
-*.py.exe
-*.py.lib
-*.py.exp
-*.py.ilk
-*.py.pdb
-*.py.nm
-*.py.map
-*.py.dSYM/
-*.py.d/
-
-# Virtual environments
-venv/
+# Dependencies
 .venv/
-env/
-.ENV/
+venv/
+node_modules/
+.mypy_cache/
+.pytest_cache/
+.gradle/
 
-# Logs
+# Logs and temp files
 *.log
+*.tmp
+*.swp
 
-# Environment variables
+# Environment
 .env
 .env.local
-.env.*
+*.env.*
 
-# IDE
+# Editors
 .vscode/
 .idea/
-*.swp
-*.swo
-*.tmp
 
-# OS
+# System files
 .DS_Store
 Thumbs.db
 
@@ -97,270 +62,4 @@ htmlcov/
 *.tar.bz2
 *.tar.xz
 *.tar.zst
-
-# Gradle
-.gradle/
-
-# MyPy
-.mypy_cache/
-
-# PyTest
-.pytest_cache/
-
-# Distribution / packaging
-.Python
-*.egg-info/
-*.dist-info/
-*.egg
-*.whl
-*.zip
-*.tar.gz
-*.tar.bz2
-*.tar.xz
 *.tar.zst
-
-# Jupyter Notebook
-.ipynb_checkpoints/
-
-# Local configuration
-config.local
-
-# Output of 'npm pack'
-*.tgz
-# env files (can opt-in for committing if needed)
-.env*
-!.env.example
-
-# Yarn
-.yarn/
-
-# Prettier
-.prettierignore
-
-# ESLint
-.eslintcache
-
-# TypeScript
-*.tsbuildinfo
-dist/
-lib/**/*.js
-lib/**/*.d.ts
-node_modules/
-
-# Compiled JavaScript
-*.js.map
-*.js.flow
-*.js.meta
-
-# Next.js
-.next/
-out/
-
-# Nuxt.js
-.nuxt/
-dist/
-
-# Vue.js
-dist/
-.vuepress/dist
-.output
-
-# React Native
-node_modules/
-.ReactNativeDebugger/
-
-# Electron
-node_modules/
-dist/
-release/
-
-# Bower
-bower_components/
-
-# Grunt
-.grunt/
-
-# Gulp
-.gulp/
-gulp-cache/
-
-# SASS
-.sass-cache/
-
-# Composer
-vendor/
-
-# PHP
-*.php~
-
-# Ruby
-*.gem
-*.rbc
-*.sassc
-.ruby-version
-.bundle
-.bundler/
-vendor/bundle
-.rbx/
-
-# Go
-*.out
-bin/
-
-# Java
-*.class
-*.jar
-*.war
-*.ear
-hs_err_pid*
-replay_pid*
-
-# Scala
-*.class
-*.log
-*.lock
-.libs/
-
-# C#
-*.suo
-*.user
-*.userosscache
-*.sln.docstates
-*.userprefs
-*.pidb
-*.svclog
-[Dd]ebug/
-[Dd]ebugPublic/
-[Rr]elease/
-[Rr]eleases/
-x64/
-x86/
-build/
-bld/
-[Bb]in/
-[Oo]bj/
-
-# C++
-*.i
-*.ii
-*.s
-*.ncb
-*.obj
-*.o
-*.so
-*.a
-*.lib
-*.dll
-*.so
-*.dylib
-*.exe
-*.out
-*.app
-*.App
-*.exe.stackdump
-*.pdb
-*.pgc
-*.pgd
-*.pgui
-*.ilk
-*.ipch
-*.aps
-*.ncb
-*.opendb
-*.sdf
-*.suo
-*.tlog
-*.vcxproj.filters
-*.VC.db
-*.VC.VC.opendb
-*.idb
-*.cod
-*.stackdump
-*.core
-*.stackdump.*
-*.StackDump
-*.StackDump.*
-*.d
-*.dSYM/
-*.d/
-*.class
-*.obj
-*.out
-*.dll
-*.so
-*.a
-*.o
-*.exe
-*.lib
-*.exp
-*.ilk
-*.pdb
-*.nm
-*.map
-*.dSYM/
-*.d/
-
-# Objective-C
-*.mode1v3
-*.mode2v3
-*.perspectivev3
-*.pbxuser
-*.xccheckout
-*.moved-aside
-*.xcuserstate
-*.xcscmblueprint
-*.hmap
-*.ipa
-*.dSYM.zip
-*.dSYM/
-*.d/
-
-# Swift
-*.swiftpm/
-Packages/
-.swift-version
-
-# Dart
-.dart_tool/
-.packages
-.pubspec.lock
-
-# Flutter
-flutter/
-.dart_tool/
-.packages
-*.g.dart
-*.freezed.dart
-*.config.dart
-*.gen.dart
-*.gr.dart
-*.gql.dart
-*.graphql.dart
-*.gql.g.dart
-*.graphql.g.dart
-*.gql.freezed.dart
-*.graphql.freezed.dart
-*.gql.config.dart
-*.graphql.config.dart
-*.gql.gen.dart
-*.graphql.gen.dart
-*.gql.gr.dart
-*.graphql.gr.dart
-
-# Android
-*.apk
-*.ap_
-*.aab
-*.dex
-*.so
-*.aar
-*.jar
-*.class
-*.dex
-*.so
-*.aar
-*.jar
-*.class
-*.so
-*.so
-*.so.*
