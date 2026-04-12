@@ -21,9 +21,9 @@ if (
   IP_HASH_SALT === DEFAULT_IP_HASH_SALT &&
   process.env.NODE_ENV === "production"
 ) {
-  console.warn(
-    "[increment-views] VIEWS_IP_SALT is not set — falling back to the public default. " +
-      "Set a random secret in your deployment env for production use."
+  throw new Error(
+    "[increment-views] VIEWS_IP_SALT is not set. " +
+      "Set a random secret (openssl rand -hex 32) in your deployment env."
   );
 }
 
