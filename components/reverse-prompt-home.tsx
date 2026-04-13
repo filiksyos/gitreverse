@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { HOME_EXAMPLES, isHomeExampleRepo } from "@/lib/home-example-repos";
+import { HOME_EXAMPLES } from "@/lib/home-example-repos";
 import { parseGitHubRepoInput } from "@/lib/parse-github-repo";
 
 const GITREVERSE_HISTORY_KEY = "gitreverse_history";
@@ -107,7 +107,6 @@ export function ReversePromptHome({
     const o = owner?.trim();
     const r = repo?.trim();
     if (!o || !r) return;
-    if (isHomeExampleRepo(o, r)) return;
 
     /* Server-side dedupes by IP hash, so we no longer need a localStorage gate. */
     void fetch("/api/increment-views", {

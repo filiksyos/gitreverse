@@ -1,6 +1,5 @@
 import { createHash } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { isHomeExampleRepo } from "@/lib/home-example-repos";
 import {
   isValidGitHubRepoPath,
   normalizeRepoSegment,
@@ -93,10 +92,6 @@ export async function POST(req: NextRequest) {
 
   if (!isValidGitHubRepoPath(owner, repo)) {
     return NextResponse.json({ error: "Invalid owner or repo." }, { status: 400 });
-  }
-
-  if (isHomeExampleRepo(owner, repo)) {
-    return NextResponse.json({ ok: true });
   }
 
   const supabase = getSupabase();
