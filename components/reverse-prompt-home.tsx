@@ -6,6 +6,8 @@ import { HOME_EXAMPLES } from "@/lib/home-example-repos";
 import { parseGitHubRepoInput } from "@/lib/parse-github-repo";
 
 const GITREVERSE_HISTORY_KEY = "gitreverse_history";
+/** Persists invite code for Custom reverse (beta) within the browser tab session. */
+const GITREVERSE_CUSTOM_REVERSE_INVITE_KEY = "gitreverse_custom_reverse_invite";
 const HISTORY_PROMPT_PREVIEW_LEN = 160;
 
 function historyPromptPreview(text: string): string {
@@ -38,6 +40,11 @@ export function ReversePromptHome({
 }: ReversePromptHomeProps) {
   const [repoUrl, setRepoUrl] = useState(initialRepoInput);
   const [customReverse, setCustomReverse] = useState(false);
+  const [inviteModalOpen, setInviteModalOpen] = useState(false);
+  const [modalInviteInput, setModalInviteInput] = useState("");
+  const [inviteModalError, setInviteModalError] = useState<string | null>(null);
+  /** Submitted invite code; sent with each custom-reverse API request. */
+  const [inviteCode, setInviteCode] = useState("");
   const [customPrompt, setCustomPrompt] = useState("");
   /** Keeps result card title accurate if user toggles mode after a run */
   const [lastResultWasCustom, setLastResultWasCustom] = useState(false);
@@ -94,7 +101,7 @@ export function ReversePromptHome({
     }
   }, []);
 
-  const runCustomReverse = useCallback(async (input: string, focus: string) => {
+  const runCustomReverse = useCallback(async (input: string, focus: string, code: string) => {
     setError(null);
     setRateLimited(false);
     setPrompt("");
@@ -104,7 +111,11 @@ export function ReversePromptHome({
       const res = await fetch("/api/custom-reverse", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ repoUrl: input, customPrompt: focus }),
+        body: JSON.stringify({
+          repoUrl: input,
+          customPrompt: focus,
+          inviteCode: code,
+        }),
       });
       const data = (await res.json()) as {
         prompt?: string;
@@ -143,10 +154,53 @@ export function ReversePromptHome({
     e.preventDefault();
     const trimmed = repoUrl.trim();
     if (customReverse) {
-      void runCustomReverse(trimmed, customPrompt.trim());
+      void runCustomReverse(trimmed, customPrompt.trim(), inviteCode);
     } else {
       void runReversePrompt(trimmed);
     }
+  }
+
+  function onCustomReverseCheckboxChange(wantsOn: boolean) {
+    if (!wantsOn) {
+      setCustomReverse(false);
+      setInviteModalOpen(false);
+      setInviteCode("");
+      if (typeof window !== "undefined") {
+        sessionStorage.removeItem(GITREVERSE_CUSTOM_REVERSE_INVITE_KEY);
+      }
+      return;
+    }
+    if (typeof window !== "undefined") {
+      const stored = sessionStorage.getItem(GITREVERSE_CUSTOM_REVERSE_INVITE_KEY);
+      if (stored) {
+        setInviteCode(stored);
+        setCustomReverse(true);
+        return;
+      }
+    }
+    setInviteModalError(null);
+    setModalInviteInput(inviteCode);
+    setInviteModalOpen(true);
+  }
+
+  function onInviteModalContinue() {
+    const t = modalInviteInput.trim();
+    if (!t) {
+      setInviteModalError("Enter your invite code.");
+      return;
+    }
+    setInviteModalError(null);
+    setInviteCode(t);
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem(GITREVERSE_CUSTOM_REVERSE_INVITE_KEY, t);
+    }
+    setCustomReverse(true);
+    setInviteModalOpen(false);
+  }
+
+  function onInviteModalCancel() {
+    setInviteModalOpen(false);
+    setInviteModalError(null);
   }
 
   useEffect(() => {
@@ -294,6 +348,84 @@ export function ReversePromptHome({
         </div>
       </nav>
 
+      {inviteModalOpen ? (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+          role="presentation"
+        >
+          <button
+            type="button"
+            className="absolute inset-0 bg-zinc-900/40"
+            aria-label="Close invite dialog"
+            onClick={onInviteModalCancel}
+          />
+          <div
+            className="relative z-10 w-full max-w-md"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="custom-reverse-invite-title"
+          >
+            <div className="absolute inset-0 translate-x-2 translate-y-2 rounded-xl bg-zinc-900" />
+            <div className="relative rounded-xl border-[3px] border-zinc-900 bg-[#fff4da] p-6 shadow-none">
+              <h2
+                id="custom-reverse-invite-title"
+                className="text-lg font-bold text-zinc-900"
+              >
+                Custom reverse
+              </h2>
+              <p className="mt-2 text-sm text-zinc-700">
+                This feature is currently invite only. Please enter your invite
+                code:
+              </p>
+              <div className="relative mt-4 w-full">
+                <div className="absolute inset-0 translate-x-1 translate-y-1 rounded bg-zinc-900" />
+                <input
+                  type="text"
+                  autoComplete="off"
+                  className="relative z-10 w-full rounded border-[3px] border-zinc-900 bg-white px-4 py-3 text-base text-zinc-900 placeholder-zinc-500 focus:outline-none"
+                  placeholder="Invite code"
+                  value={modalInviteInput}
+                  onChange={(e) => setModalInviteInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      onInviteModalContinue();
+                    }
+                  }}
+                />
+              </div>
+              {inviteModalError ? (
+                <p className="mt-2 text-sm text-red-600" role="alert">
+                  {inviteModalError}
+                </p>
+              ) : null}
+              <div className="mt-6 flex flex-wrap gap-2">
+                <div className="group relative">
+                  <div className="absolute inset-0 translate-x-1 translate-y-1 rounded bg-zinc-800" />
+                  <button
+                    type="button"
+                    className="relative z-10 rounded border-[3px] border-zinc-900 bg-[#d31611] px-4 py-2 font-semibold text-white transition-transform hover:-translate-x-px hover:-translate-y-px"
+                    onClick={onInviteModalContinue}
+                  >
+                    Continue
+                  </button>
+                </div>
+                <div className="group relative">
+                  <div className="absolute inset-0 translate-x-1 translate-y-1 rounded bg-zinc-900" />
+                  <button
+                    type="button"
+                    className="relative z-10 rounded border-[3px] border-zinc-900 bg-white px-4 py-2 font-semibold text-zinc-900 transition-transform hover:-translate-x-px hover:-translate-y-px"
+                    onClick={onInviteModalCancel}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col items-center gap-12 px-4 py-12 sm:px-6">
         <div className="flex w-full flex-col items-center gap-6">
           <div className="relative flex w-full flex-col items-center text-center">
@@ -420,10 +552,12 @@ export function ReversePromptHome({
                     <input
                       type="checkbox"
                       className="h-4 w-4 rounded border-[2px] border-zinc-900"
-                      checked={customReverse}
-                      onChange={(e) => setCustomReverse(e.target.checked)}
+                      checked={customReverse || inviteModalOpen}
+                      onChange={(e) =>
+                        onCustomReverseCheckboxChange(e.target.checked)
+                      }
                     />
-                    Custom reverse (deep focus — needs local agent service)
+                    Custom reverse (beta, invite only)
                   </label>
                   {customReverse ? (
                     <div className="relative w-full">

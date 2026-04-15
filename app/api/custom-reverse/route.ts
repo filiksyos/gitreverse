@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 
 const DEFAULT_CUSTOM_REVERSE_URL = "http://localhost:3001";
@@ -8,15 +9,77 @@ function getServiceUrl(): string {
   );
 }
 
-/** Long-running agent; allow up to 10 minutes for slow clones + many tool turns. */
+/** Comma-separated invite codes (trimmed, empty segments skipped). */
+function parseInviteCodes(raw: string | undefined): string[] {
+  if (!raw?.trim()) return [];
+  return raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function isProduction(): boolean {
+  return process.env.NODE_ENV === "production";
+}
+
+/** Case-insensitive match; uses timing-safe compare when lengths align with a candidate. */
+function isValidInviteCode(
+  submitted: string,
+  validCodes: string[]
+): boolean {
+  const t = submitted.trim();
+  if (!t) return false;
+  const lower = t.toLowerCase();
+  const lowerBuf = Buffer.from(lower, "utf8");
+  for (const code of validCodes) {
+    const c = code.trim();
+    if (!c) continue;
+    if (c.length !== t.length) continue;
+    const candLower = c.toLowerCase();
+    if (candLower.length !== lower.length) continue;
+    const candBuf = Buffer.from(candLower, "utf8");
+    if (lowerBuf.length !== candBuf.length) continue;
+    try {
+      if (timingSafeEqual(lowerBuf, candBuf)) return true;
+    } catch {
+      /* length mismatch — skip */
+    }
+  }
+  return false;
+}
+
+/** Long-running upstream request; allow up to 10 minutes. */
 const FETCH_TIMEOUT_MS = 600_000;
 
 export async function POST(request: NextRequest) {
-  let body: { repoUrl?: string; customPrompt?: string };
+  let body: { repoUrl?: string; customPrompt?: string; inviteCode?: string };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  const codes = parseInviteCodes(process.env.CUSTOM_REVERSE_INVITE_CODES);
+
+  if (isProduction() && codes.length === 0) {
+    return NextResponse.json(
+      {
+        error:
+          "Custom reverse (beta) is not available. The host has not configured invite access.",
+      },
+      { status: 503 }
+    );
+  }
+
+  if (codes.length > 0) {
+    const inviteCode =
+      typeof body.inviteCode === "string" ? body.inviteCode : "";
+    if (!isValidInviteCode(inviteCode, codes)) {
+      return NextResponse.json(
+        { error: "Invalid or missing invite code." },
+        { status: 403 }
+      );
+    }
   }
 
   const repoUrl = body.repoUrl;
@@ -58,7 +121,7 @@ export async function POST(request: NextRequest) {
       {
         error: isAbort
           ? "Custom reverse timed out. Try a smaller repo or a narrower prompt."
-          : `Custom reverse service unreachable (${msg}). Is custom-reverse running on ${base}?`,
+          : `Custom reverse service unreachable (${msg}). Check CUSTOM_REVERSE_SERVICE_URL and that the service is running.`,
       },
       { status: 503 }
     );
