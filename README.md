@@ -8,6 +8,8 @@ The app pulls **repo metadata**, a **root file tree** (depth 1), and the **READM
 
 Paste a GitHub URL or `owner/repo` on the home page. You can also open **`/owner/repo`** (e.g. `/vercel/next.js`) for a shareable link that runs the same flow.
 
+GitHub-style **`/owner/repo/tree/...`** URLs on this site **redirect to `/owner/repo`** so they do not 404. The reverse flow still uses the whole repo for now; **subfolder-aware** context (scoped to that path) is planned for a later change.
+
 ## Stack
 
 Next.js (App Router), React, TypeScript, Tailwind CSS, GitHub API, OpenRouter.
