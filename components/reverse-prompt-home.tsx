@@ -39,7 +39,7 @@ export function ReversePromptHome({
   const [repoUrl, setRepoUrl] = useState(initialRepoInput);
   const [customReverse, setCustomReverse] = useState(false);
   const [customPrompt, setCustomPrompt] = useState("");
-  /** Keeps result card title accurate if user toggles mode after a run */
+  /** Hides “Deep Reverse” after a custom or deep run (not needed for that result). */
   const [lastResultWasCustom, setLastResultWasCustom] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -520,9 +520,7 @@ export function ReversePromptHome({
             <section className="relative z-10 rounded-xl border-[3px] border-zinc-900 bg-[#fafafa] p-6">
               <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                 <h2 className="text-sm font-semibold text-zinc-700">
-                  {lastResultWasCustom
-                    ? "Manual control prompt"
-                    : "Reverse engineered prompt"}
+                  Reverse engineered prompt
                 </h2>
                 <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
                   {reverseEngineeredRepo ? (
