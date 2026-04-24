@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import http from "node:http";
 import https from "node:https";
@@ -17,6 +18,17 @@ function getServiceUrl(): string {
 
 /** 15 min hard cap — route-level abort. */
 const ROUTE_TIMEOUT_MS = 900_000;
+
+const inFlight = new Map<string, Promise<NextResponse>>();
+
+/** MD5 hex of UTF-8 focus — must match `md5(focus::text)` in Postgres (see `focus_fingerprint` column). */
+function focusFingerprint(focus: string): string {
+  return createHash("md5").update(focus, "utf8").digest("hex");
+}
+
+function buildInFlightKey(owner: string, repo: string, focus: string): string {
+  return `${owner}/${repo}:${focusFingerprint(focus)}`;
+}
 
 /**
  * Raw http.request with no socket/headers timeout (Node default is 0 = none).
@@ -77,50 +89,58 @@ function persistCustomPromptCache(opts: {
   if (!sb) return;
   const parsed = parseGitHubRepoInput(opts.repoUrl);
   if (!parsed) return;
+  const fp = focusFingerprint(opts.focus);
   void sb
     .from("custom_prompt_cache")
-    .insert({
-      owner: parsed.owner,
-      repo: parsed.repo,
-      focus: opts.focus,
-      prompt: opts.prompt,
-    })
+    .upsert(
+      {
+        owner: parsed.owner,
+        repo: parsed.repo,
+        focus: opts.focus,
+        focus_fingerprint: fp,
+        prompt: opts.prompt,
+        cached_at: new Date().toISOString(),
+      },
+      { onConflict: "owner,repo,focus_fingerprint" }
+    )
     .then(({ error }) => {
       if (error) {
         console.error(
-          "[custom-reverse] Supabase insert failed:",
+          "[custom-reverse] Supabase upsert failed:",
           error.message
         );
       }
     });
 }
 
-export async function POST(request: NextRequest) {
-  let body: { repoUrl?: string; customPrompt?: string; mode?: string };
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
-  }
+async function executeCustomReverse(opts: {
+  repoUrl: string;
+  customPrompt: string | undefined;
+  isDeep: boolean;
+  focus: string;
+  parsed: { owner: string; repo: string } | null;
+}): Promise<NextResponse> {
+  const { repoUrl, customPrompt, isDeep, focus, parsed } = opts;
+  const fp = focusFingerprint(focus);
 
-  const repoUrl = body.repoUrl;
-  const customPrompt = body.customPrompt;
-  const isDeep = body.mode === "deep";
-
-  if (typeof repoUrl !== "string" || !repoUrl.trim()) {
-    return NextResponse.json(
-      { error: "repoUrl is required (string)" },
-      { status: 400 }
-    );
-  }
-  if (
-    !isDeep &&
-    (typeof customPrompt !== "string" || !customPrompt.trim())
-  ) {
-    return NextResponse.json(
-      { error: "customPrompt is required (string)" },
-      { status: 400 }
-    );
+  if (parsed) {
+    const supabase = getSupabase();
+    if (supabase) {
+      try {
+        const { data, error } = await supabase
+          .from("custom_prompt_cache")
+          .select("prompt")
+          .eq("owner", parsed.owner)
+          .eq("repo", parsed.repo)
+          .eq("focus_fingerprint", fp)
+          .maybeSingle();
+        if (!error && data?.prompt) {
+          return NextResponse.json({ prompt: data.prompt as string });
+        }
+      } catch {
+        // cache miss — continue to upstream
+      }
+    }
   }
 
   const base = getServiceUrl().replace(/\/$/, "");
@@ -194,9 +214,75 @@ export async function POST(request: NextRequest) {
 
   persistCustomPromptCache({
     repoUrl: repoUrl.trim(),
-    focus: isDeep ? "[deep] whole codebase" : customPrompt!.trim(),
+    focus,
     prompt,
   });
 
   return NextResponse.json({ prompt }, { status: 200 });
+}
+
+export async function POST(request: NextRequest) {
+  let body: { repoUrl?: string; customPrompt?: string; mode?: string };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  const repoUrl = body.repoUrl;
+  const customPrompt = body.customPrompt;
+  const isDeep = body.mode === "deep";
+
+  if (typeof repoUrl !== "string" || !repoUrl.trim()) {
+    return NextResponse.json(
+      { error: "repoUrl is required (string)" },
+      { status: 400 }
+    );
+  }
+  if (
+    !isDeep &&
+    (typeof customPrompt !== "string" || !customPrompt.trim())
+  ) {
+    return NextResponse.json(
+      { error: "customPrompt is required (string)" },
+      { status: 400 }
+    );
+  }
+
+  const trimmedUrl = repoUrl.trim();
+  const focus = isDeep ? "[deep] whole codebase" : customPrompt!.trim();
+  const parsed = parseGitHubRepoInput(trimmedUrl);
+  const parsedForCache = parsed
+    ? { owner: parsed.owner, repo: parsed.repo }
+    : null;
+
+  if (!parsedForCache) {
+    return executeCustomReverse({
+      repoUrl: trimmedUrl,
+      customPrompt,
+      isDeep,
+      focus,
+      parsed: null,
+    });
+  }
+
+  const key = buildInFlightKey(parsedForCache.owner, parsedForCache.repo, focus);
+  const existing = inFlight.get(key);
+  if (existing) {
+    return await existing;
+  }
+
+  const promise = executeCustomReverse({
+    repoUrl: trimmedUrl,
+    customPrompt,
+    isDeep,
+    focus,
+    parsed: parsedForCache,
+  });
+  inFlight.set(key, promise);
+  try {
+    return await promise;
+  } finally {
+    inFlight.delete(key);
+  }
 }
