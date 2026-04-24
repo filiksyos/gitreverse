@@ -80,6 +80,57 @@ function httpPost(
   });
 }
 
+/** Background-parse SSE for `event: done` and persist; errors ignored. */
+async function parseSseStreamForDonePersist(
+  body: ReadableStream<Uint8Array>,
+  repoUrl: string,
+  focus: string
+): Promise<void> {
+  const reader = body.getReader();
+  const dec = new TextDecoder();
+  let buf = "";
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      for (;;) {
+        const idx = buf.indexOf("\n\n");
+        if (idx < 0) break;
+        const block = buf.slice(0, idx);
+        buf = buf.slice(idx + 2);
+        if (!block.includes("event: done")) continue;
+        const dataLine = block
+          .split("\n")
+          .find((l) => l.startsWith("data: "));
+        if (!dataLine) continue;
+        try {
+          const json = JSON.parse(
+            dataLine.slice(5).trim() as string
+          ) as { prompt?: string };
+          if (typeof json.prompt === "string" && json.prompt) {
+            persistCustomPromptCache({
+              repoUrl: repoUrl.trim(),
+              focus,
+              prompt: json.prompt,
+            });
+          }
+        } catch {
+          // ignore
+        }
+      }
+    }
+  } catch {
+    // ignore
+  } finally {
+    try {
+      reader.releaseLock();
+    } catch {
+      // ignore
+    }
+  }
+}
+
 function persistCustomPromptCache(opts: {
   repoUrl: string;
   focus: string;
@@ -135,7 +186,10 @@ async function executeCustomReverse(opts: {
           .eq("focus_fingerprint", fp)
           .maybeSingle();
         if (!error && data?.prompt) {
-          return NextResponse.json({ prompt: data.prompt as string });
+          return NextResponse.json({
+            prompt: data.prompt as string,
+            fromCache: true,
+          });
         }
       } catch {
         // cache miss — continue to upstream
@@ -221,8 +275,124 @@ async function executeCustomReverse(opts: {
   return NextResponse.json({ prompt }, { status: 200 });
 }
 
+/**
+ * Server-Sent Events proxy to `custom_reverse` /reverse/stream, with cache short-circuit.
+ * Tee response to persist the final `done` event in Supabase.
+ */
+async function executeCustomReverseStream(opts: {
+  repoUrl: string;
+  customPrompt: string | undefined;
+  isDeep: boolean;
+  focus: string;
+  parsed: { owner: string; repo: string } | null;
+}): Promise<NextResponse> {
+  const { repoUrl, customPrompt, isDeep, focus, parsed } = opts;
+  const fp = focusFingerprint(focus);
+
+  if (parsed) {
+    const supabase = getSupabase();
+    if (supabase) {
+      try {
+        const { data, error } = await supabase
+          .from("custom_prompt_cache")
+          .select("prompt")
+          .eq("owner", parsed.owner)
+          .eq("repo", parsed.repo)
+          .eq("focus_fingerprint", fp)
+          .maybeSingle();
+        if (!error && data?.prompt) {
+          return NextResponse.json({
+            prompt: data.prompt as string,
+            fromCache: true,
+          });
+        }
+      } catch {
+        // cache miss
+      }
+    }
+  }
+
+  const base = getServiceUrl().replace(/\/$/, "");
+  const upstreamBody: { repoUrl: string; customPrompt?: string; mode?: "deep" } = {
+    repoUrl: repoUrl.trim(),
+  };
+  if (isDeep) {
+    upstreamBody.mode = "deep";
+  } else {
+    upstreamBody.customPrompt = customPrompt!.trim();
+  }
+
+  let upstream: Response;
+  try {
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), ROUTE_TIMEOUT_MS);
+    upstream = await fetch(`${base}/reverse/stream`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(upstreamBody),
+      signal: ac.signal,
+    });
+    clearTimeout(timer);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    const isAbortOrTimeout =
+      /abort/i.test(msg) || msg === "The operation was aborted.";
+    return NextResponse.json(
+      {
+        error: isAbortOrTimeout
+          ? "Manual control timed out. Try a smaller repo or a narrower prompt."
+          : `Manual control service unreachable (${msg}). Check CUSTOM_REVERSE_SERVICE_URL and that the service is running.`,
+      },
+      { status: 503 }
+    );
+  }
+
+  if (!upstream.ok) {
+    let err = `Request failed (${upstream.status})`;
+    try {
+      const j = (await upstream.json()) as { error?: string };
+      if (j.error) err = j.error;
+    } catch {
+      // ignore
+    }
+    return NextResponse.json(
+      { error: err },
+      { status: upstream.status >= 400 && upstream.status < 600 ? upstream.status : 502 }
+    );
+  }
+
+  if (!upstream.body) {
+    return NextResponse.json(
+      { error: "Manual control service returned an empty body." },
+      { status: 502 }
+    );
+  }
+
+  const [toClient, toParse] = upstream.body.tee();
+  void parseSseStreamForDonePersist(
+    toParse,
+    repoUrl.trim(),
+    focus
+  );
+
+  return new Response(toClient, {
+    status: 200,
+    headers: {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
+    },
+  });
+}
+
 export async function POST(request: NextRequest) {
-  let body: { repoUrl?: string; customPrompt?: string; mode?: string };
+  let body: {
+    repoUrl?: string;
+    customPrompt?: string;
+    mode?: string;
+    stream?: boolean;
+  };
   try {
     body = await request.json();
   } catch {
@@ -232,6 +402,7 @@ export async function POST(request: NextRequest) {
   const repoUrl = body.repoUrl;
   const customPrompt = body.customPrompt;
   const isDeep = body.mode === "deep";
+  const useStream = body.stream === true;
 
   if (typeof repoUrl !== "string" || !repoUrl.trim()) {
     return NextResponse.json(
@@ -255,6 +426,25 @@ export async function POST(request: NextRequest) {
   const parsedForCache = parsed
     ? { owner: parsed.owner, repo: parsed.repo }
     : null;
+
+  if (useStream) {
+    if (!parsedForCache) {
+      return executeCustomReverseStream({
+        repoUrl: trimmedUrl,
+        customPrompt,
+        isDeep,
+        focus,
+        parsed: null,
+      });
+    }
+    return executeCustomReverseStream({
+      repoUrl: trimmedUrl,
+      customPrompt,
+      isDeep,
+      focus,
+      parsed: parsedForCache,
+    });
+  }
 
   if (!parsedForCache) {
     return executeCustomReverse({

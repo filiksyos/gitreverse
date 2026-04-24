@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { ReverseGenerationFlavorText } from "@/components/reverse-generation-flavor-text";
 import { HOME_EXAMPLES } from "@/lib/home-example-repos";
 import { parseGitHubRepoInput } from "@/lib/parse-github-repo";
 
@@ -46,6 +47,13 @@ export function ReversePromptHome({
   const [rateLimited, setRateLimited] = useState(false);
   const [prompt, setPrompt] = useState(initialPrompt ?? "");
   const [copied, setCopied] = useState(false);
+  /** Live line for manual/deep (SSE or cache); empty when idle. */
+  const [manualStatusLine, setManualStatusLine] = useState("");
+  /**
+   * Which request is in flight. Deep Reverse uses `runCustomReverse` without
+   * the Manual control checkbox, so we cannot key off `customReverse` alone.
+   */
+  const [loadKind, setLoadKind] = useState<"none" | "quick" | "custom">("none");
   const resultsRef = useRef<HTMLDivElement | null>(null);
   const autoSubmitStartedRef = useRef(false);
 
@@ -54,6 +62,7 @@ export function ReversePromptHome({
     setRateLimited(false);
     setPrompt("");
     setCopied(false);
+    setLoadKind("quick");
     setLoading(true);
     try {
       const res = await fetch("/api/reverse-prompt", {
@@ -91,6 +100,7 @@ export function ReversePromptHome({
       setError(err instanceof Error ? err.message : "Request failed");
     } finally {
       setLoading(false);
+      setLoadKind("none");
     }
   }, []);
 
@@ -100,49 +110,138 @@ export function ReversePromptHome({
       setRateLimited(false);
       setPrompt("");
       setCopied(false);
+      setManualStatusLine("Checking if it's cached…");
+      setLoadKind("custom");
       setLoading(true);
       try {
         const isDeep =
           typeof focusOrDeep === "object" && focusOrDeep.mode === "deep";
+        const bodyObj = isDeep
+          ? { repoUrl: input, mode: "deep" as const, stream: true as const }
+          : {
+              repoUrl: input,
+              customPrompt: focusOrDeep as string,
+              stream: true as const,
+            };
+
         const res = await fetch("/api/custom-reverse", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(
-            isDeep
-              ? { repoUrl: input, mode: "deep" as const }
-              : { repoUrl: input, customPrompt: focusOrDeep as string }
-          ),
+          body: JSON.stringify(bodyObj),
         });
-        const data = (await res.json()) as {
-          prompt?: string;
-          error?: string;
-        };
-        if (!res.ok) {
-          if (res.status === 429) {
-            setRateLimited(true);
+
+        const ct = res.headers.get("content-type") ?? "";
+
+        if (ct.includes("application/json")) {
+          const data = (await res.json()) as {
+            prompt?: string;
+            error?: string;
+            fromCache?: boolean;
+          };
+          if (!res.ok) {
+            if (res.status === 429) {
+              setRateLimited(true);
+              return;
+            }
+            setError(data.error ?? `Request failed (${res.status})`);
             return;
           }
-          setError(data.error ?? `Request failed (${res.status})`);
+          if (typeof data.prompt === "string") {
+            if (data.fromCache) {
+              setManualStatusLine("Loaded from cache");
+              await new Promise((r) => setTimeout(r, 450));
+            }
+            setPrompt(data.prompt);
+            setLastResultWasCustom(true);
+            const parsed = parseGitHubRepoInput(input);
+            if (parsed && typeof window !== "undefined") {
+              window.history.replaceState(
+                null,
+                "",
+                `/${encodeURIComponent(parsed.owner)}/${encodeURIComponent(parsed.repo)}`
+              );
+            }
+          } else {
+            setError("No prompt in response.");
+          }
           return;
         }
-        if (typeof data.prompt === "string") {
-          setPrompt(data.prompt);
-          setLastResultWasCustom(true);
-          const parsed = parseGitHubRepoInput(input);
-          if (parsed && typeof window !== "undefined") {
-            window.history.replaceState(
-              null,
-              "",
-              `/${encodeURIComponent(parsed.owner)}/${encodeURIComponent(parsed.repo)}`
-            );
+
+        if (!res.ok) {
+          try {
+            const errData = (await res.json()) as { error?: string };
+            setError(errData.error ?? `Request failed (${res.status})`);
+          } catch {
+            setError(`Request failed (${res.status})`);
           }
-        } else {
-          setError("No prompt in response.");
+          return;
+        }
+
+        if (!res.body) {
+          setError("No response body from manual control.");
+          return;
+        }
+
+        const reader = res.body.getReader();
+        const dec = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += dec.decode(value, { stream: true });
+          for (;;) {
+            const idx = buffer.indexOf("\n\n");
+            if (idx < 0) break;
+            const block = buffer.slice(0, idx);
+            buffer = buffer.slice(idx + 2);
+            let event = "message";
+            let dataStr = "";
+            for (const line of block.split("\n")) {
+              if (line.startsWith("event:")) {
+                event = line.slice(6).trim();
+              } else if (line.startsWith("data:")) {
+                dataStr = line.slice(5).trim();
+              }
+            }
+            if (!dataStr) continue;
+            try {
+              if (event === "status") {
+                const j = JSON.parse(dataStr) as { message?: string };
+                if (typeof j.message === "string" && j.message) {
+                  setManualStatusLine(j.message);
+                }
+              } else if (event === "done") {
+                const j = JSON.parse(dataStr) as { prompt?: string };
+                if (typeof j.prompt === "string") {
+                  setPrompt(j.prompt);
+                  setLastResultWasCustom(true);
+                  const parsed = parseGitHubRepoInput(input);
+                  if (parsed && typeof window !== "undefined") {
+                    window.history.replaceState(
+                      null,
+                      "",
+                      `/${encodeURIComponent(parsed.owner)}/${encodeURIComponent(parsed.repo)}`
+                    );
+                  }
+                } else {
+                  setError("No prompt in response.");
+                }
+              } else if (event === "error") {
+                const j = JSON.parse(dataStr) as { error?: string };
+                setError(j.error ?? "Request failed");
+              }
+            } catch {
+              // ignore malformed SSE chunk
+            }
+          }
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Request failed");
       } finally {
         setLoading(false);
+        setLoadKind("none");
+        setManualStatusLine("");
       }
     },
     []
@@ -150,6 +249,7 @@ export function ReversePromptHome({
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (loading) return;
     const trimmed = repoUrl.trim();
     if (customReverse) {
       void runCustomReverse(trimmed, customPrompt.trim());
@@ -427,11 +527,18 @@ export function ReversePromptHome({
                   </div>
                 </div>
                 <div className="flex w-full flex-col gap-2">
-                  <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-zinc-800">
+                  <label
+                    className={`flex items-center gap-2 text-sm font-medium ${
+                      loading
+                        ? "cursor-not-allowed text-zinc-500"
+                        : "cursor-pointer text-zinc-800"
+                    }`}
+                  >
                     <input
                       type="checkbox"
-                      className="h-4 w-4 rounded border-[2px] border-zinc-900"
+                      className="h-4 w-4 rounded border-[2px] border-zinc-900 disabled:cursor-not-allowed disabled:opacity-50"
                       checked={customReverse}
+                      disabled={loading}
                       onChange={(e) =>
                         onCustomReverseCheckboxChange(e.target.checked)
                       }
@@ -444,34 +551,51 @@ export function ReversePromptHome({
                       <textarea
                         name="customPrompt"
                         rows={4}
-                        className="relative z-10 w-full resize-y rounded border-[3px] border-zinc-900 bg-white px-4 py-3 text-base text-zinc-900 placeholder-zinc-500 focus:outline-none"
+                        className="relative z-10 w-full resize-y rounded border-[3px] border-zinc-900 bg-white px-4 py-3 text-base text-zinc-900 placeholder-zinc-500 focus:outline-none disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:opacity-80"
                         placeholder="ask for detailed prompt or focus on a specific feature"
                         value={customPrompt}
                         onChange={(e) => setCustomPrompt(e.target.value)}
                         required={customReverse}
+                        disabled={loading}
                       />
                     </div>
                   ) : null}
                 </div>
               </div>
 
-              <div className="mt-4 flex flex-wrap gap-2">
-                <span className="w-full text-sm text-zinc-600">
-                  Try example repos:
-                </span>
-                {HOME_EXAMPLES.map(({ label, url }) => (
-                  <div key={url} className="group relative">
-                    <div className="absolute inset-0 translate-x-0.5 translate-y-0.5 rounded bg-zinc-900" />
-                    <button
-                      type="button"
-                      onClick={() => setRepoUrl(url)}
-                      className="relative z-10 rounded border-[3px] border-zinc-900 bg-[#EBDBB7] px-3 py-1 text-sm font-medium text-zinc-900 transition-transform hover:bg-[#ffc480] group-hover:-translate-x-px group-hover:-translate-y-px"
+              {loading ? (
+                <div className="mt-4">
+                  {loadKind === "custom" ? (
+                    <p
+                      className="min-h-[1.25rem] text-sm text-zinc-600"
+                      role="status"
+                      aria-live="polite"
                     >
-                      {label}
-                    </button>
-                  </div>
-                ))}
-              </div>
+                      {manualStatusLine}
+                    </p>
+                  ) : (
+                    <ReverseGenerationFlavorText />
+                  )}
+                </div>
+              ) : (
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <span className="w-full text-sm text-zinc-600">
+                    Try example repos:
+                  </span>
+                  {HOME_EXAMPLES.map(({ label, url }) => (
+                    <div key={url} className="group relative">
+                      <div className="absolute inset-0 translate-x-0.5 translate-y-0.5 rounded bg-zinc-900" />
+                      <button
+                        type="button"
+                        onClick={() => setRepoUrl(url)}
+                        className="relative z-10 rounded border-[3px] border-zinc-900 bg-[#EBDBB7] px-3 py-1 text-sm font-medium text-zinc-900 transition-transform hover:bg-[#ffc480] group-hover:-translate-x-px group-hover:-translate-y-px"
+                      >
+                        {label}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {rateLimited ? (
                 <div className="mt-4 rounded-lg border-[3px] border-amber-400 bg-amber-50 p-4" role="alert">
