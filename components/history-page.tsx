@@ -49,9 +49,9 @@ function isHistoryEntry(x: unknown): x is HistoryEntry {
   const gt = (x as HistoryEntry).lastGenerationType;
   if (
     gt !== undefined &&
-    gt !== "quick" &&
-    gt !== "deep" &&
-    gt !== "manual"
+    gt !== "hızlı" &&
+    gt !== "derin" &&
+    gt !== "manuel"
   ) {
     return false;
   }
@@ -64,15 +64,15 @@ function isHistoryEntry(x: unknown): x is HistoryEntry {
 function relativeTime(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
   const s = Math.floor(diff / 1000);
-  if (s < 60) return "just now";
+  if (s < 60) return "Şimdi";
   const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ago`;
+  if (m < 60) return `${m}dk önce`;
   const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
+  if (h < 24) return `${h}saat önce`;
   const d = Math.floor(h / 24);
-  if (d < 30) return `${d}d ago`;
+  if (d < 30) return `${d}gün önce`;
   const mo = Math.floor(d / 30);
-  return `${mo}mo ago`;
+  return `${mo}ay önce`;
 }
 
 export function HistoryPage() {
@@ -138,7 +138,7 @@ export function HistoryPage() {
             History
           </h1>
           <p className="text-zinc-600">
-            Your previously generated prompts.
+            Önceki oluşturduğunuz istemler.
           </p>
         </div>
 
@@ -146,12 +146,12 @@ export function HistoryPage() {
           <p className="text-center text-zinc-500 sm:text-left">Loading&hellip;</p>
         ) : entries.length === 0 ? (
           <p className="text-center text-zinc-600 sm:text-left">
-            No history yet. Check out the{" "}
+            Geçmiş yok (şimdilik) şuraya bir bak:{" "}
             <Link
               href="/library"
               className="font-semibold text-zinc-900 underline decoration-zinc-900/30 underline-offset-2 transition-colors hover:decoration-zinc-900"
             >
-              Prompt Library
+              istem Kütüphanesi
             </Link>
             .
           </p>
@@ -172,19 +172,19 @@ export function HistoryPage() {
 function generationBadge(entry: HistoryEntry): { label: string; title?: string } | null {
   const t = entry.lastGenerationType;
   if (t === "deep") {
-    return { label: "Deep", title: "Deep Reverse" };
+    return { label: "Derin", title: "Derin Tersine Mühendislik" };
   }
   if (t === "manual") {
     const f = entry.lastManualFocus?.trim();
     const short =
       f && f.length > 48 ? `${f.slice(0, 48).trimEnd()}…` : f;
     return {
-      label: short ? `Manual: ${short}` : "Manual",
-      title: f ?? "Manual control",
+      label: short ? `Manuel: ${short}` : "Manuel",
+      title: f ?? "Manuel Kontrol",
     };
   }
   if (t === "quick") {
-    return { label: "Quick", title: "Quick reverse prompt" };
+    return { label: "Hızlı", title: "Hızlı tersine komut" };
   }
   return null;
 }

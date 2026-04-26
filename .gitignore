@@ -1,6 +1,6 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# Dosyaları yok sayma hakkında daha fazla bilgi için https://help.github.com/articles/ignoring-files/ adresini ziyaret edin.
 
-# dependencies
+# dependencies / bağımlılıklar
 /node_modules
 /.pnp
 .pnp.*
@@ -10,27 +10,27 @@
 !.yarn/releases
 !.yarn/versions
 
-# testing
+# testing / Testler
 /coverage
 
 # next.js
 /.next/
 /out/
 
-# production
+# production / Yayınlama
 /build
 
-# misc
+# misc / diğerleri
 .DS_Store
 *.pem
 
-# debug
+# debug / hata ayıklama
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# env files (can opt-in for committing if needed) / env dosyaları (gerekirse commit işlemine dahil edilebilir)
 .env*
 !.env.example
 

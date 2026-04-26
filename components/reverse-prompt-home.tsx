@@ -137,7 +137,7 @@ export function ReversePromptHome({
           setRateLimited(true);
           return;
         }
-        setError(data.error ?? `Request failed (${res.status})`);
+        setError(data.error ?? `İstek Başarısız: (${res.status})`);
         return;
       }
       if (typeof data.prompt === "string") {
@@ -157,7 +157,7 @@ export function ReversePromptHome({
         setError("No prompt in response.");
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Request failed");
+      setError(err instanceof Error ? err.message : "İstek Başarısız");
     } finally {
       setLoading(false);
       setLoadKind("none");
@@ -170,7 +170,7 @@ export function ReversePromptHome({
       setRateLimited(false);
       setPrompt("");
       setCopied(false);
-      setManualStatusLine("Checking if it's cached…");
+      setManualStatusLine("Bellektemi diye kontrol ediliyor…");
       setLoadKind("custom");
       setLoading(true);
       try {
@@ -203,12 +203,12 @@ export function ReversePromptHome({
               setRateLimited(true);
               return;
             }
-            setError(data.error ?? `Request failed (${res.status})`);
+            setError(data.error ?? `İstek başarısız: (${res.status})`);
             return;
           }
           if (typeof data.prompt === "string") {
             if (data.fromCache) {
-              setManualStatusLine("Loaded from cache");
+              setManualStatusLine("Bellekten yüklendi.");
               await new Promise((r) => setTimeout(r, 450));
             }
             setPrompt(data.prompt);
@@ -229,7 +229,7 @@ export function ReversePromptHome({
               );
             }
           } else {
-            setError("No prompt in response.");
+            setError("Cevapta İstem Metni yok.");
           }
           return;
         }
@@ -237,15 +237,15 @@ export function ReversePromptHome({
         if (!res.ok) {
           try {
             const errData = (await res.json()) as { error?: string };
-            setError(errData.error ?? `Request failed (${res.status})`);
+            setError(errData.error ?? `İstek başarısız: (${res.status})`);
           } catch {
-            setError(`Request failed (${res.status})`);
+            setError(`İstek başarısız: (${res.status})`);
           }
           return;
         }
 
         if (!res.body) {
-          setError("No response body from manual control.");
+          setError("Manuel Kontrolden gelen cevap gövdesi yok.");
           return;
         }
 
@@ -299,7 +299,7 @@ export function ReversePromptHome({
                     );
                   }
                 } else {
-                  setError("No prompt in response.");
+                  setError("Cevapta istem metni yok.");
                 }
               } else if (event === "error") {
                 const j = JSON.parse(dataStr) as { error?: string };
@@ -311,7 +311,7 @@ export function ReversePromptHome({
           }
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Request failed");
+        setError(err instanceof Error ? err.message : "İstek Başarısız");
       } finally {
         setLoading(false);
         setLoadKind("none");
@@ -488,7 +488,7 @@ export function ReversePromptHome({
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      setError("Could not copy to clipboard.");
+      setError("Panoya kopyalanamadı.");
     }
   }
 
@@ -505,13 +505,13 @@ export function ReversePromptHome({
               href="/library"
               className="font-semibold text-zinc-900 transition-transform hover:-translate-y-0.5"
             >
-              Library
+              Kütüphane
             </Link>
             <Link
               href="/history"
               className="font-semibold text-zinc-900 transition-transform hover:-translate-y-0.5"
             >
-              History
+              Geçmiş
             </Link>
             <a
               href="https://github.com/filiksyos/gitreverse"
@@ -519,7 +519,7 @@ export function ReversePromptHome({
               rel="noopener noreferrer"
               className="font-semibold text-zinc-900 transition-transform hover:-translate-y-0.5"
             >
-              GitHub
+              GitHub Sayfası
             </a>
           </div>
         </div>
@@ -571,14 +571,14 @@ export function ReversePromptHome({
             </svg>
 
             <h1 className="text-5xl font-extrabold tracking-tighter sm:text-6xl lg:text-7xl">
-              Repository to
+              Depodan ->
               <br />
-              Prompt
+              İsteme
             </h1>
             <p className="mt-4 max-w-xl text-lg text-zinc-600">
-              Reverse engineer a codebase{" "}
-              into a prompt
-              that likely created it.
+              Bir kod tabanını{" "}
+              Komut İstemine
+              dönüştürün.
             </p>
           </div>
 
@@ -636,10 +636,10 @@ export function ReversePromptHome({
                               d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                             />
                           </svg>
-                          <span>Processing…</span>
+                          <span>Oluşturuluyor...</span>
                         </>
                       ) : (
-                        "Get Prompt"
+                        "Komut istemini al"
                       )}
                     </button>
                   </div>
@@ -661,7 +661,7 @@ export function ReversePromptHome({
                         onCustomReverseCheckboxChange(e.target.checked)
                       }
                     />
-                    Manual control
+                    Manuel Kontrol
                   </label>
                   {customReverse ? (
                     <div className="relative w-full">
@@ -698,7 +698,7 @@ export function ReversePromptHome({
               ) : (
                 <div className="mt-4 flex flex-wrap gap-2">
                   <span className="w-full text-sm text-zinc-600">
-                    Try example repos:
+                    Örnek depoları deneyin
                   </span>
                   {HOME_EXAMPLES.map(({ label, url }) => (
                     <div key={url} className="group relative">
@@ -717,14 +717,14 @@ export function ReversePromptHome({
 
               {rateLimited ? (
                 <div className="mt-4 rounded-lg border-[3px] border-amber-400 bg-amber-50 p-4" role="alert">
-                  <p className="font-semibold text-amber-900">Sorry, we&apos;re a bit overwhelmed right now.</p>
+                  <p className="font-semibold text-amber-900">Üzgünüz, biz&apos; şuanda baya hararetli durumdayız, sonra gel olurmu?</p>
                   <div className="mt-3 flex flex-wrap gap-2">
-                    <p className="w-full text-sm text-amber-800">Come back in a couple of hours, or check out what others have already generated:</p>
+                    <p className="w-full text-sm text-amber-800">Bir kaç saat içinde geri gelin, yada zaten oluşturduğumuz komut istemlerine bakın.</p>
                     <Link
                       href="/library"
                       className="inline-flex items-center gap-1.5 rounded border-[2px] border-amber-600 bg-amber-100 px-3 py-1.5 text-sm font-semibold text-amber-900 transition-colors hover:bg-amber-200"
                     >
-                      Browse the library
+                      Kütüphaneyi gez
                       <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                         <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                       </svg>
@@ -762,7 +762,7 @@ export function ReversePromptHome({
             <section className="relative z-10 rounded-xl border-[3px] border-zinc-900 bg-[#fafafa] p-6">
               <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                 <h2 className="text-sm font-semibold text-zinc-700">
-                  Reverse engineered prompt
+                  Tersine mühendislikle oluşturulan komut
                 </h2>
                 <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
                   {reverseEngineeredRepo ? (
@@ -799,7 +799,7 @@ export function ReversePromptHome({
                       onClick={copyPrompt}
                       className="relative z-10 rounded border-[3px] border-zinc-900 bg-[#ffc480] px-3 py-1.5 text-xs font-medium text-zinc-900 transition-transform group-hover:-translate-x-px group-hover:-translate-y-px"
                     >
-                      {copied ? "Copied!" : "Copy"}
+                      {copied ? "Kopyalandı!" : "Copy"}
                     </button>
                   </div>
                 </div>
@@ -809,7 +809,7 @@ export function ReversePromptHome({
               </pre>
               {!lastResultWasCustom && !loading ? (
                 <p className="mt-4 text-center text-sm text-zinc-600">
-                  Want more depth?{" "}
+                  Biraz daha derinlikmi?{" "}
                   <span
                     role="button"
                     tabIndex={0}
@@ -823,7 +823,7 @@ export function ReversePromptHome({
                       void runCustomReverse(repoUrl.trim(), { mode: "deep" });
                     }}
                   >
-                    Deep Reverse
+                    Derin Tersine Mühendislik
                   </span>
                 </p>
               ) : null}
@@ -849,7 +849,7 @@ export function ReversePromptHome({
             >
               <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z" />
             </svg>
-            Discord
+            Discord Sunucumuz
           </a>
         </div>
       </footer>

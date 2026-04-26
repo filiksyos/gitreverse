@@ -1,6 +1,6 @@
 import { normalizeRepoSegment, parseGitHubRepoInput } from "@/lib/parse-github-repo";
 
-/** Hero “Try example repos” — excluded from view-count tracking so usage stats stay representative. */
+/** Hero “Örnek Depoları deneyin” — görüntüleme sayımı izlemesinden hariç tutulmuştur; böylece kullanım istatistikleri temsil edici kalır.*/
 export const HOME_EXAMPLES = [
   { label: "Next.js", url: "https://github.com/vercel/next.js" },
   { label: "Openclaw", url: "https://github.com/openclaw/openclaw" },
