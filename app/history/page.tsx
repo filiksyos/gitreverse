@@ -1,8 +1,8 @@
 import { HistoryPage } from "@/components/history-page";
 
 export const metadata = {
-  title: "History — GitReverse",
-  description: "Repositories you recently viewed on GitReverse.",
+  title: "Geçmiş — GitReverse",
+  description: "GitReverse'de görüntülediğin Depoların geçmişini görüntüle.",
 };
 
 export default function HistoryRoute() {
