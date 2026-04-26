@@ -22,7 +22,7 @@ if (
 ) {
   throw new Error(
     "[increment-views] VIEWS_IP_SALT is not set. " +
-      "Set a random secret (openssl rand -hex 32) in your deployment env."
+      "Deployment ortamında rastgele bir secret ayarlayın (openssl rand -hex 32)."
   );
 }
 
