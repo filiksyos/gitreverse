@@ -1,5 +1,5 @@
 /**
- * Formats GitHub file tree data into a readable directory structure.
+ * GitHub dosya ağacı verisini okunabilir formata dönüştürür.
  */
 
 interface FileTreeItem {
