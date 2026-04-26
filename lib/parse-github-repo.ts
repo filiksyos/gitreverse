@@ -20,7 +20,7 @@ export function parseGitHubRepoInput(
       return { owner: parts[0], repo: withoutGit(parts[1]) };
     }
   } catch {
-    // fall through to owner/repo form
+    // Sahip/Depo formuna doğru düş
   }
 
   const parts = s.split("/").filter(Boolean);
@@ -31,12 +31,12 @@ export function parseGitHubRepoInput(
   return null;
 }
 
-/** Strip trailing `.git` for path validation (URL segment may include it). */
+/** Yol Doğrulaması (.git) (URL parçası bunu dahil edebilir). */
 export function normalizeRepoSegment(repo: string): string {
   return repo.trim().replace(/\.git$/i, "");
 }
 
-/** Validates dynamic route segments for `/[owner]/[repo]`. */
+/** `/[owner]/[repo]` için dinamik yol parçalarını doğrular. */
 export function isValidGitHubRepoPath(owner: string, repo: string): boolean {
   const o = owner.trim();
   const r = normalizeRepoSegment(repo);
