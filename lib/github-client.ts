@@ -1,5 +1,5 @@
 /**
- * GitHub API Client — native fetch.
+ * GitHub API İstemcisi - Native Fetch
  */
 
 const GITHUB_API = "https://api.github.com";
