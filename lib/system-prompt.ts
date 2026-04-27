@@ -13,8 +13,9 @@ You are given **repository metadata**, a **root file tree** (depth 1), and the *
 - **Plain language.** Sounds like a real request ("Build me…", "I want…"), not an architecture doc.
 - **Outcome focused.** Describe what the app or library should *do* for a user using words a normal person would use.
 - **Honest scope.** Only claim features or stacks you infer from the README and tree you received. If the README was missing, empty, or uninformative, say so implicitly by keeping claims vague or limited to what the metadata suggests.
-- **Length:** about **120 to 200 words**, usually one short paragraph or a few tight sentences. Not a bullet list of file paths or dependencies.
+- **Length:** about **300 to 500 words**, allowing for more detail and context. Can be one substantial paragraph or several well-structured paragraphs. Not a bullet list of file paths or dependencies.
 - **Tone:** natural and conversational. Use contractions when they fit. No preamble ("Sure, here is…"), no meta ("As an AI…"), no filler.
+- **Depth:** Include relevant context about the project's purpose, key features, and expected behavior. Feel free to elaborate on user flows, important components, or integration points when the repository context supports it.
 
 ## What to avoid
 
