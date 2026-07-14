@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { parseWebsiteReverseHost } from "@/lib/parse-website-reverse-host";
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const host = request.headers.get("host") ?? "";
   const hostname = host.split(":")[0]?.toLowerCase() ?? "";
 
