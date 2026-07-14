@@ -1,0 +1,45 @@
+#cloud-config
+package_update: true
+
+runcmd:
+  # Install Caddy from official apt repo
+  - apt install -y debian-keyring debian-archive-keyring apt-transport-https curl
+  - curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+  - curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list
+  - apt update
+  - apt install -y caddy
+
+  # Write Caddyfile
+  - |
+    cat > /etc/caddy/Caddyfile << 'CADDYEOF'
+    {
+      on_demand_tls {
+        ask https://gitreverse.com/api/tls-check?domain={host}
+      }
+      email franknick285@gmail.com
+    }
+
+    https:// {
+      tls {
+        on_demand
+      }
+
+      @www {
+        header_regexp host Host ^www\.(.+)\.gitreverse\.com$
+      }
+      redir @www https://{re.host.1}.gitreverse.com{uri} 308
+
+      reverse_proxy https://gitreverse.com {
+        header_up Host {host}
+        header_up X-Forwarded-Host {host}
+        header_up X-Forwarded-Proto https
+        transport http {
+          tls_server_name gitreverse.com
+        }
+      }
+    }
+    CADDYEOF
+
+  # Enable and start Caddy
+  - systemctl enable caddy
+  - systemctl restart caddy

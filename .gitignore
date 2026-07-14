@@ -46,3 +46,6 @@ next-env.d.ts
 
 # website reverse test output
 .website-reverse/
+
+# caddy azure deploy spec (contains storage keys / ACR passwords)
+caddy/aci.yaml

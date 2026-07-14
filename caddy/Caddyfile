@@ -1,0 +1,33 @@
+{
+	# On-demand TLS: ask our app before issuing a cert for any hostname.
+	# This prevents rate-limit abuse from arbitrary domains pointing here.
+	on_demand_tls {
+		ask https://gitreverse.com/api/tls-check?domain={host}
+	}
+
+	email franknick285@gmail.com
+}
+
+# Catch-all HTTPS: Caddy issues a cert on first hit, ~3s delay, instant after.
+https:// {
+	tls {
+		on_demand
+	}
+
+	# www.X.gitreverse.com → X.gitreverse.com (permanent redirect)
+	@www {
+		header_regexp host Host ^www\.(.+)\.gitreverse\.com$
+	}
+	redir @www https://{re.host.1}.gitreverse.com{uri} 308
+
+	# Everything else: proxy to Vercel, preserving the original Host header
+	# so Next.js middleware sees e.g. "pinterest.gitreverse.com" and rewrites correctly.
+	reverse_proxy https://gitreverse.com {
+		header_up Host {host}
+		header_up X-Forwarded-Host {host}
+		header_up X-Forwarded-Proto https
+		transport http {
+			tls_server_name gitreverse.com
+		}
+	}
+}
