@@ -66,10 +66,6 @@ export const treeToString = (node: TreeNode, prefix = "", isRoot = true): string
   sortTreeNodes(node);
   let result = "";
 
-  if (!isRoot) {
-    result += `${prefix}${node.name}${node.isDirectory ? "/" : ""}\n`;
-  }
-
   for (let i = 0; i < node.children.length; i++) {
     const child = node.children[i];
     if (!child) continue;
