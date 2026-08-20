@@ -20,16 +20,19 @@ Copy `.env.example` to `.env.local` and fill in at least one LLM API key.
 
 ### Quick LLM (required)
 
-The quick reverse endpoint supports four providers. Set **`GITREVERSE_QUICK_LLM`** to pin one, or leave it unset (`auto`) to let the app use whichever key it finds first:
+The quick reverse endpoint supports five providers. Set **`GITREVERSE_QUICK_LLM`** to pin one, or leave it unset (`auto`) to let the app use whichever key it finds first:
 
 | Provider | Key env var | Model env var | Default model |
 |---|---|---|---|
 | Grok (xAI) | `XAI_API_KEY` | `XAI_MODEL` | `grok-3` |
 | OpenRouter | `OPENROUTER_API_KEY` | `OPENROUTER_MODEL` | `google/gemini-2.5-pro` |
+| OrcaRouter | `ORCAROUTER_API_KEY` | `ORCAROUTER_MODEL` | `anthropic/claude-sonnet-5` |
 | Azure OpenAI | `AZURE_OPENAI_API_KEY` + `AZURE_OPENAI_BASE_URL` | `AZURE_OPENAI_MODEL` | `gpt-5.4` |
 | Google AI Studio | `GOOGLE_GENERATIVE_AI_API_KEY` | `GOOGLE_AI_STUDIO_MODEL` | `gemini-2.5-pro` |
 
-In `auto` mode the order of preference is: Grok → OpenRouter → Azure → Google.
+In `auto` mode the order of preference is: Grok → OpenRouter → OrcaRouter → Azure → Google.
+
+[OrcaRouter](https://www.orcarouter.ai) is an OpenAI-compatible gateway that also runs gateway-level, zero-trust security for AI agents on the same endpoint — screening every prompt/response and governing every tool call on a default-deny basis, with no application code changes. Its model ids are namespaced (e.g. `anthropic/claude-sonnet-5`), so the default above uses one.
 
 Azure quick reverse uses `gpt-5.4` by default with `AZURE_OPENAI_REASONING_EFFORT=medium`. Title generation also uses Azure and defaults to `gpt-5.4-mini` with reasoning disabled.
 

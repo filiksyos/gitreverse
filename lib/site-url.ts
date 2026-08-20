@@ -19,6 +19,14 @@ export function websiteDesignPageUrl(slug: string): string {
   return `${getSiteBaseUrl()}/designs/${encodeURIComponent(slug)}`;
 }
 
+export function gameSpecApiUrl(slug: string): string {
+  return `${getSiteBaseUrl()}/api/game-spec/${encodeURIComponent(slug)}`;
+}
+
+export function gameSpecPageUrl(slug: string): string {
+  return `${getSiteBaseUrl()}/specs/${encodeURIComponent(slug)}`;
+}
+
 function normalizePath(path: string): string {
   return path.startsWith("/") ? path : `/${path}`;
 }

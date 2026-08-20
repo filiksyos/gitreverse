@@ -380,6 +380,37 @@ function LibraryCard({ entry }: { entry: LibraryEntry }) {
 }
 
 function KindBadge({ kind }: { kind: LibraryEntry["kind"] }) {
+  if (kind === "game") {
+    return (
+      <span
+        className="inline-flex shrink-0 items-center gap-1 rounded border border-violet-200 bg-violet-50 px-2 py-0.5 text-xs font-medium text-violet-800"
+        title="Game reverse"
+      >
+        <svg
+          className="h-3.5 w-3.5 shrink-0"
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={2}
+          aria-hidden
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"
+          />
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+          />
+        </svg>
+        Game
+      </span>
+    );
+  }
+
   if (kind === "website") {
     return (
       <span

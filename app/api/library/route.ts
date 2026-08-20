@@ -11,7 +11,7 @@ const LIMIT = 24;
 
 function parseKindFilter(raw: string | null): LibraryKindFilter {
   const v = raw?.trim().toLowerCase();
-  if (v === "code" || v === "website") return v;
+  if (v === "code" || v === "website" || v === "game") return v;
   return "all";
 }
 

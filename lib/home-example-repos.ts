@@ -18,6 +18,13 @@ export const HOME_WEBSITE_EXAMPLES = [
   { label: "Discord", url: "https://discord.com" },
 ] as const;
 
+/** Hero “Try example games” for home Game mode. */
+export const HOME_GAME_EXAMPLES = [
+  { label: "GTA Vice City", name: "GTA Vice City" },
+  { label: "Celeste", name: "Celeste" },
+  { label: "Worms Armageddon", name: "Worms Armageddon" },
+] as const;
+
 const EXAMPLE_OWNER_REPO_KEYS = new Set(
   HOME_EXAMPLES.map((ex) => {
     const p = parseGitHubRepoInput(ex.url);

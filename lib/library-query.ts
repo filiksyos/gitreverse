@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { embedText } from "@/lib/embeddings";
 import {
   codeEntryFromRow,
+  gameEntryFromRow,
   paginateLibraryEntries,
   sortLibraryEntries,
   websiteEntryFromRow,
@@ -17,8 +18,10 @@ const MAX_FETCH_LIMIT = 96;
 
 const CODE_TABLE = "library_code_entries";
 const WEBSITE_TABLE = "library_website_entries";
+const GAME_TABLE = "library_game_entries";
 const CODE_COLUMNS = "id, owner, repo, prompt, cached_at, views, title";
 const WEBSITE_COLUMNS = "slug, target_url, prompt, cached_at";
+const GAME_COLUMNS = "slug, game_name, prompt, cached_at";
 
 type PromptRow = {
   id: number;
@@ -34,6 +37,13 @@ type PromptRow = {
 type WebsiteRow = {
   slug: string;
   target_url: string;
+  prompt: string;
+  cached_at: string;
+};
+
+type GameRow = {
+  slug: string;
+  game_name: string;
   prompt: string;
   cached_at: string;
 };
@@ -104,6 +114,14 @@ function applyWebsiteSort(
   }
 }
 
+function applyGameSort(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  query: any,
+  sort: SortOption
+) {
+  return applyWebsiteSort(query, sort);
+}
+
 async function fetchCodeBrowse(
   supabase: SupabaseClient,
   sort: SortOption,
@@ -131,6 +149,20 @@ async function fetchWebsiteBrowse(
 
   if (error) throw new Error(error.message);
   return { rows: (data ?? []) as WebsiteRow[], total: count ?? 0 };
+}
+
+async function fetchGameBrowse(
+  supabase: SupabaseClient,
+  sort: SortOption,
+  fetchLimit: number
+): Promise<{ rows: GameRow[]; total: number }> {
+  const { data, count, error } = await applyGameSort(
+    supabase.from(GAME_TABLE).select(GAME_COLUMNS, { count: "exact" }),
+    sort
+  ).range(0, fetchLimit - 1);
+
+  if (error) throw new Error(error.message);
+  return { rows: (data ?? []) as GameRow[], total: count ?? 0 };
 }
 
 type FtsStrategy = "fts-plain" | "fts-or" | "ilike-and" | "ilike-or";
@@ -241,6 +273,30 @@ async function fetchWebsiteSearch(
   return { rows: (data ?? []) as WebsiteRow[], total: count ?? 0 };
 }
 
+async function fetchGameSearch(
+  supabase: SupabaseClient,
+  search: string,
+  sort: SortOption,
+  fetchLimit: number
+): Promise<{ rows: GameRow[]; total: number }> {
+  const words = searchWords(search);
+  let query = supabase.from(GAME_TABLE).select(GAME_COLUMNS, { count: "exact" });
+
+  if (words.length > 0) {
+    for (const word of words) {
+      query = query.or(`slug.ilike.%${word}%,game_name.ilike.%${word}%`);
+    }
+  }
+
+  const { data, count, error } = await applyGameSort(query, sort).range(
+    0,
+    fetchLimit - 1
+  );
+
+  if (error) throw new Error(error.message);
+  return { rows: (data ?? []) as GameRow[], total: count ?? 0 };
+}
+
 function scoreWebsiteSearch(row: WebsiteRow, search: string): number {
   const words = searchWords(search);
   if (words.length === 0) return 0;
@@ -249,6 +305,19 @@ function scoreWebsiteSearch(row: WebsiteRow, search: string): number {
     const w = word.toLowerCase();
     if (row.slug.toLowerCase().includes(w)) score += 3;
     if (row.target_url.toLowerCase().includes(w)) score += 2;
+    if (row.prompt.toLowerCase().includes(w)) score += 1;
+  }
+  return score / words.length;
+}
+
+function scoreGameSearch(row: GameRow, search: string): number {
+  const words = searchWords(search);
+  if (words.length === 0) return 0;
+  let score = 0;
+  for (const word of words) {
+    const w = word.toLowerCase();
+    if (row.slug.toLowerCase().includes(w)) score += 3;
+    if (row.game_name.toLowerCase().includes(w)) score += 3;
     if (row.prompt.toLowerCase().includes(w)) score += 1;
   }
   return score / words.length;
@@ -329,11 +398,13 @@ async function hybridSearchCount(
 function mergeBrowse(
   codeRows: PromptRow[],
   websiteRows: WebsiteRow[],
+  gameRows: GameRow[],
   sort: SortOption
 ): LibraryEntry[] {
   const entries = [
     ...codeRows.map(codeEntryFromRow),
     ...websiteRows.map(websiteEntryFromRow),
+    ...gameRows.map(gameEntryFromRow),
   ];
   return sortLibraryEntries(entries, sort);
 }
@@ -341,6 +412,7 @@ function mergeBrowse(
 function mergeSearch(
   codeRows: PromptRow[],
   websiteRows: WebsiteRow[],
+  gameRows: GameRow[],
   search: string
 ): LibraryEntry[] {
   const entries: LibraryEntry[] = [
@@ -348,6 +420,15 @@ function mergeSearch(
     ...websiteRows.map((row) => {
       const entry = websiteEntryFromRow(row);
       const textScore = scoreWebsiteSearch(row, search);
+      const hybridScore = entry.relevance_score ?? 0;
+      return {
+        ...entry,
+        relevance_score: Math.max(hybridScore, textScore > 0 ? textScore / 3 : 0),
+      };
+    }),
+    ...gameRows.map((row) => {
+      const entry = gameEntryFromRow(row);
+      const textScore = scoreGameSearch(row, search);
       const hybridScore = entry.relevance_score ?? 0;
       return {
         ...entry,
@@ -383,7 +464,7 @@ function logSourceFailure(
 }
 
 async function safeBrowseSource<T>(
-  source: "code" | "website",
+  source: "code" | "website" | "game",
   fetch: () => Promise<{ rows: T[]; total: number }>
 ): Promise<{ rows: T[]; total: number }> {
   try {
@@ -395,7 +476,7 @@ async function safeBrowseSource<T>(
 }
 
 async function safeSearchSource<T>(
-  source: "code" | "website",
+  source: "code" | "website" | "game",
   fetch: () => Promise<{ rows: T[]; total: number }>
 ): Promise<{ rows: T[]; total: number }> {
   try {
@@ -451,7 +532,7 @@ export async function browseLibrary(opts: {
 
   if (kind === "code") {
     const code = await fetchCodeBrowse(opts.supabase, opts.sort, fetchLimit);
-    const merged = mergeBrowse(code.rows, [], opts.sort);
+    const merged = mergeBrowse(code.rows, [], [], opts.sort);
     return {
       data: paginateLibraryEntries(merged, opts.page, opts.limit),
       total: code.total,
@@ -464,26 +545,38 @@ export async function browseLibrary(opts: {
       opts.sort,
       fetchLimit
     );
-    const merged = mergeBrowse([], website.rows, opts.sort);
+    const merged = mergeBrowse([], website.rows, [], opts.sort);
     return {
       data: paginateLibraryEntries(merged, opts.page, opts.limit),
       total: website.total,
     };
   }
 
-  const [code, website] = await Promise.all([
+  if (kind === "game") {
+    const game = await fetchGameBrowse(opts.supabase, opts.sort, fetchLimit);
+    const merged = mergeBrowse([], [], game.rows, opts.sort);
+    return {
+      data: paginateLibraryEntries(merged, opts.page, opts.limit),
+      total: game.total,
+    };
+  }
+
+  const [code, website, game] = await Promise.all([
     safeBrowseSource("code", () =>
       fetchCodeBrowse(opts.supabase, opts.sort, fetchLimit)
     ),
     safeBrowseSource("website", () =>
       fetchWebsiteBrowse(opts.supabase, opts.sort, fetchLimit)
     ),
+    safeBrowseSource("game", () =>
+      fetchGameBrowse(opts.supabase, opts.sort, fetchLimit)
+    ),
   ]);
 
-  const merged = mergeBrowse(code.rows, website.rows, opts.sort);
+  const merged = mergeBrowse(code.rows, website.rows, game.rows, opts.sort);
   return {
     data: paginateLibraryEntries(merged, opts.page, opts.limit),
-    total: code.total + website.total,
+    total: code.total + website.total + game.total,
   };
 }
 
@@ -510,11 +603,26 @@ export async function searchLibrary(opts: {
       opts.sort,
       fetchLimit
     );
-    const merged = mergeSearch([], website.rows, opts.search);
+    const merged = mergeSearch([], website.rows, [], opts.search);
     return {
       data: paginateLibraryEntries(merged, opts.page, opts.limit),
       total: website.total,
       strategy: "website-metadata",
+    };
+  }
+
+  if (kind === "game") {
+    const game = await fetchGameSearch(
+      opts.supabase,
+      opts.search,
+      opts.sort,
+      fetchLimit
+    );
+    const merged = mergeSearch([], [], game.rows, opts.search);
+    return {
+      data: paginateLibraryEntries(merged, opts.page, opts.limit),
+      total: game.total,
+      strategy: "game-metadata",
     };
   }
 
@@ -526,7 +634,7 @@ export async function searchLibrary(opts: {
           hybridSearchCount(opts.supabase, opts.search),
         ]);
         if (codeRows.length > 0) {
-          const merged = mergeSearch(codeRows, [], opts.search);
+          const merged = mergeSearch(codeRows, [], [], opts.search);
           return {
             data: paginateLibraryEntries(merged, opts.page, opts.limit),
             total: codeTotal,
@@ -547,7 +655,7 @@ export async function searchLibrary(opts: {
       opts.sort,
       fetchLimit
     );
-    const merged = mergeSearch(code.rows, [], opts.search);
+    const merged = mergeSearch(code.rows, [], [], opts.search);
     return {
       data: paginateLibraryEntries(merged, opts.page, opts.limit),
       total: code.total,
@@ -556,39 +664,50 @@ export async function searchLibrary(opts: {
   }
 
   if (opts.useHybrid) {
-    const [codeRows, website, codeTotal] = await Promise.all([
+    const [codeRows, website, game, codeTotal] = await Promise.all([
       safeHybridCodeRows(() =>
         fetchCodeHybrid(opts.supabase, opts.search, fetchLimit)
       ),
       safeSearchSource("website", () =>
         fetchWebsiteSearch(opts.supabase, opts.search, opts.sort, fetchLimit)
       ),
+      safeSearchSource("game", () =>
+        fetchGameSearch(opts.supabase, opts.search, opts.sort, fetchLimit)
+      ),
       safeHybridCount(() => hybridSearchCount(opts.supabase, opts.search)),
     ]);
 
-    if (codeRows.length > 0 || website.rows.length > 0) {
-      const merged = mergeSearch(codeRows, website.rows, opts.search);
+    if (codeRows.length > 0 || website.rows.length > 0 || game.rows.length > 0) {
+      const merged = mergeSearch(
+        codeRows,
+        website.rows,
+        game.rows,
+        opts.search
+      );
       return {
         data: paginateLibraryEntries(merged, opts.page, opts.limit),
-        total: codeTotal + website.total,
+        total: codeTotal + website.total + game.total,
         strategy: "hybrid",
       };
     }
   }
 
-  const [code, website] = await Promise.all([
+  const [code, website, game] = await Promise.all([
     safeCodeSearch(() =>
       fetchCodeSearch(opts.supabase, opts.search, opts.sort, fetchLimit)
     ),
     safeSearchSource("website", () =>
       fetchWebsiteSearch(opts.supabase, opts.search, opts.sort, fetchLimit)
     ),
+    safeSearchSource("game", () =>
+      fetchGameSearch(opts.supabase, opts.search, opts.sort, fetchLimit)
+    ),
   ]);
 
-  const merged = mergeSearch(code.rows, website.rows, opts.search);
+  const merged = mergeSearch(code.rows, website.rows, game.rows, opts.search);
   return {
     data: paginateLibraryEntries(merged, opts.page, opts.limit),
-    total: code.total + website.total,
+    total: code.total + website.total + game.total,
     strategy: code.strategy,
   };
 }

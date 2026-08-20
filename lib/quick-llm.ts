@@ -10,11 +10,17 @@ import {
 } from "@/lib/azure-openai";
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
+const ORCAROUTER_URL = "https://api.orcarouter.ai/v1/chat/completions";
 const XAI_URL = "https://api.x.ai/v1/chat/completions";
 const GOOGLE_AI_STUDIO_URL =
   "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
 
-export type LlmProvider = "openrouter" | "grok" | "azure" | "google";
+export type LlmProvider =
+  | "openrouter"
+  | "orcarouter"
+  | "grok"
+  | "azure"
+  | "google";
 
 export type LlmTarget = {
   provider: LlmProvider;
@@ -39,6 +45,15 @@ function openRouterTargetFromApiKey(apiKey: string): LlmTarget {
     url: OPENROUTER_URL,
     apiKey,
     model: process.env.OPENROUTER_MODEL?.trim() || "google/gemini-2.5-pro",
+  };
+}
+
+function orcarouterTargetFromApiKey(apiKey: string): LlmTarget {
+  return {
+    provider: "orcarouter",
+    url: ORCAROUTER_URL,
+    apiKey,
+    model: process.env.ORCAROUTER_MODEL?.trim() || "anthropic/claude-sonnet-5",
   };
 }
 
@@ -80,17 +95,19 @@ function googleTargetFromApiKey(apiKey: string): LlmTarget {
 function resolveLlmTargetAuto(
   xaiKey: string | undefined,
   openRouterKey: string | undefined,
+  orcarouterKey: string | undefined,
   azureKey: string | undefined,
   azureBaseUrl: string | undefined,
   googleKey: string | undefined
 ): LlmTarget | { error: string } {
   if (xaiKey) return grokTargetFromApiKey(xaiKey);
   if (openRouterKey) return openRouterTargetFromApiKey(openRouterKey);
+  if (orcarouterKey) return orcarouterTargetFromApiKey(orcarouterKey);
   if (azureKey && azureBaseUrl) return azureTargetFromEnv();
   if (googleKey) return googleTargetFromApiKey(googleKey);
   return {
     error:
-      "No LLM API key configured. Set GITREVERSE_QUICK_LLM and the matching key(s), or leave GITREVERSE_QUICK_LLM unset (auto) and set one of: XAI_API_KEY, OPENROUTER_API_KEY, AZURE_OPENAI_API_KEY + AZURE_OPENAI_BASE_URL, GOOGLE_GENERATIVE_AI_API_KEY.",
+      "No LLM API key configured. Set GITREVERSE_QUICK_LLM and the matching key(s), or leave GITREVERSE_QUICK_LLM unset (auto) and set one of: XAI_API_KEY, OPENROUTER_API_KEY, ORCAROUTER_API_KEY, AZURE_OPENAI_API_KEY + AZURE_OPENAI_BASE_URL, GOOGLE_GENERATIVE_AI_API_KEY.",
   };
 }
 
@@ -100,6 +117,7 @@ export function resolveLlmTarget(): LlmTarget | { error: string } {
 
   const xaiKey = process.env.XAI_API_KEY?.trim();
   const openRouterKey = process.env.OPENROUTER_API_KEY?.trim();
+  const orcarouterKey = process.env.ORCAROUTER_API_KEY?.trim();
   const azureKey = getAzureOpenAiApiKey() ?? undefined;
   const azureBaseUrl = getAzureOpenAiBaseUrl() ?? undefined;
   const googleKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim();
@@ -108,17 +126,24 @@ export function resolveLlmTarget(): LlmTarget | { error: string } {
     return resolveLlmTargetAuto(
       xaiKey,
       openRouterKey,
+      orcarouterKey,
       azureKey,
       azureBaseUrl,
       googleKey
     );
   }
 
-  const valid = new Set(["grok", "openrouter", "azure", "google"]);
+  const valid = new Set([
+    "grok",
+    "openrouter",
+    "orcarouter",
+    "azure",
+    "google",
+  ]);
   if (!valid.has(mode)) {
     return {
       error:
-        "Invalid GITREVERSE_QUICK_LLM. Use grok, openrouter, azure, google, or auto.",
+        "Invalid GITREVERSE_QUICK_LLM. Use grok, openrouter, orcarouter, azure, google, or auto.",
     };
   }
 
@@ -141,6 +166,14 @@ export function resolveLlmTarget(): LlmTarget | { error: string } {
         };
       }
       return openRouterTargetFromApiKey(openRouterKey);
+    case "orcarouter":
+      if (!orcarouterKey) {
+        return {
+          error:
+            "GITREVERSE_QUICK_LLM=orcarouter requires ORCAROUTER_API_KEY in .env.local.",
+        };
+      }
+      return orcarouterTargetFromApiKey(orcarouterKey);
     case "azure":
       return azureTargetFromEnv();
     case "google":
@@ -158,6 +191,8 @@ function providerDisplayName(p: LlmProvider): string {
   switch (p) {
     case "openrouter":
       return "OpenRouter";
+    case "orcarouter":
+      return "OrcaRouter";
     case "grok":
       return "xAI Grok";
     case "azure":
@@ -342,11 +377,13 @@ export async function callQuickLlm(
     const authHint =
       llm.provider === "openrouter"
         ? "OpenRouter authentication failed. Check OPENROUTER_API_KEY in .env.local."
-        : llm.provider === "grok"
-          ? "xAI Grok authentication failed. Check XAI_API_KEY in .env.local."
-          : llm.provider === "azure"
-            ? "Azure OpenAI authentication failed. Check AZURE_OPENAI_API_KEY and AZURE_OPENAI_BASE_URL in .env.local."
-            : "Google AI Studio authentication failed. Check GOOGLE_GENERATIVE_AI_API_KEY in .env.local.";
+        : llm.provider === "orcarouter"
+          ? "OrcaRouter authentication failed. Check ORCAROUTER_API_KEY in .env.local."
+          : llm.provider === "grok"
+            ? "xAI Grok authentication failed. Check XAI_API_KEY in .env.local."
+            : llm.provider === "azure"
+              ? "Azure OpenAI authentication failed. Check AZURE_OPENAI_API_KEY and AZURE_OPENAI_BASE_URL in .env.local."
+              : "Google AI Studio authentication failed. Check GOOGLE_GENERATIVE_AI_API_KEY in .env.local.";
     return {
       ok: false,
       error: isAuth ? authHint : `Generation failed: ${msg}`,

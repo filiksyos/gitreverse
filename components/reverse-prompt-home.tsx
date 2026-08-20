@@ -55,14 +55,19 @@ export function ReversePromptHome({
   const resultsRef = useRef<HTMLDivElement | null>(null);
   const autoSubmitStartedRef = useRef(false);
 
-  /** Home: honor `?mode=website` for shareable website-reverse entry. */
+  /** Home: honor `?mode=website`; legacy `?mode=game` redirects to /game. */
   useEffect(() => {
     if (!isHome || typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
-    if (params.get("mode")?.trim().toLowerCase() === "website") {
+    const mode = params.get("mode")?.trim().toLowerCase();
+    if (mode === "game") {
+      void router.replace("/game");
+      return;
+    }
+    if (mode === "website") {
       setHomeMode("website");
     }
-  }, [isHome]);
+  }, [isHome, router]);
 
   const runReversePrompt = useCallback(async (input: string) => {
     setError(null);
@@ -308,7 +313,13 @@ export function ReversePromptHome({
                 a prompt
               </h1>
               <p className="mt-4 max-w-xl text-lg text-zinc-600">
-                Reverse engineer any codebase or website into a prompt.
+                Reverse engineer any codebase or website into a prompt.{" "}
+                <Link
+                  href="/game"
+                  className="font-medium text-zinc-800 underline decoration-zinc-400 underline-offset-2 hover:text-zinc-950"
+                >
+                  Games too.
+                </Link>
               </p>
             </div>
           ) : owner && repo ? (
@@ -341,7 +352,7 @@ export function ReversePromptHome({
                 aria-selected={homeMode === "website"}
                 aria-pressed={homeMode === "website"}
                 onClick={() => setHomeModeAndUrl("website")}
-                className={`px-5 py-2.5 text-sm font-bold transition-colors ${
+                className={`border-r-[2.5px] border-zinc-900 px-5 py-2.5 text-sm font-bold transition-colors ${
                   homeMode === "website"
                     ? "bg-[#d31611] text-white"
                     : "bg-transparent text-zinc-600 hover:bg-zinc-50"
@@ -349,6 +360,12 @@ export function ReversePromptHome({
               >
                 Website
               </button>
+              <Link
+                href="/game"
+                className="px-5 py-2.5 text-sm font-bold text-zinc-600 transition-colors hover:bg-zinc-50"
+              >
+                Game
+              </Link>
             </div>
           ) : null}
 

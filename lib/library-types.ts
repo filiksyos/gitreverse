@@ -1,4 +1,4 @@
-export type LibraryEntryKind = "code" | "website";
+export type LibraryEntryKind = "code" | "website" | "game";
 
 export type LibraryKindFilter = "all" | LibraryEntryKind;
 
@@ -18,6 +18,8 @@ export type LibraryEntry = {
   /** Website reverse */
   slug?: string;
   target_url?: string;
+  /** Game reverse */
+  game_name?: string;
 };
 
 export type SortOption = "trending" | "newest" | "oldest";
@@ -72,6 +74,26 @@ export function websiteEntryFromRow(row: {
     cached_at: row.cached_at,
     title: hostname,
     href: `/website/${encodeURIComponent(row.slug)}?url=${encodeURIComponent(row.target_url)}`,
+    relevance_score: row.relevance_score,
+  };
+}
+
+export function gameEntryFromRow(row: {
+  slug: string;
+  game_name: string;
+  prompt: string;
+  cached_at: string;
+  relevance_score?: number;
+}): LibraryEntry {
+  return {
+    kind: "game",
+    key: `game:${row.slug}`,
+    slug: row.slug,
+    game_name: row.game_name,
+    prompt: row.prompt,
+    cached_at: row.cached_at,
+    title: row.game_name,
+    href: `/game/${encodeURIComponent(row.slug)}?name=${encodeURIComponent(row.game_name)}`,
     relevance_score: row.relevance_score,
   };
 }
