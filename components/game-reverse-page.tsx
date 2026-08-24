@@ -3,9 +3,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { GameSpecFlavorText } from "@/components/game-spec-flavor-text";
+import { HeroKernelPreview } from "@/components/hero-kernel-preview";
 import { Navbar } from "@/components/navbar";
 import { PromptMarkdown } from "@/components/prompt-markdown";
 import { nameToSlug, parseGameInput } from "@/lib/parse-game-input";
+import type { StoredHeroAsset } from "@/lib/game-asset-storage";
 
 type GameReversePageProps = {
   gameSlug: string;
@@ -24,13 +26,33 @@ export function GameReversePage({ gameSlug, gameName }: GameReversePageProps) {
   const [loading, setLoading] = useState(true);
   const [statusLine, setStatusLine] = useState("Checking if it's cached…");
   const [copied, setCopied] = useState(false);
+  const [heroAssets, setHeroAssets] = useState<
+    Array<StoredHeroAsset & { url: string }>
+  >([]);
   const started = useRef(false);
   const resultsRef = useRef<HTMLDivElement>(null);
+
+  const loadHeroAssets = useCallback(async (slug: string) => {
+    try {
+      const res = await fetch(`/api/game-assets/${encodeURIComponent(slug)}`);
+      if (!res.ok) {
+        setHeroAssets([]);
+        return;
+      }
+      const data = (await res.json()) as {
+        assets?: Array<StoredHeroAsset & { url: string }>;
+      };
+      setHeroAssets(data.assets ?? []);
+    } catch {
+      setHeroAssets([]);
+    }
+  }, []);
 
   const run = useCallback(async (slug: string, name: string) => {
     setLoading(true);
     setError(null);
     setPrompt(null);
+    setHeroAssets([]);
     setStatusLine("Checking if it's cached…");
 
     try {
@@ -57,6 +79,7 @@ export function GameReversePage({ gameSlug, gameName }: GameReversePageProps) {
         if (data.prompt) {
           setPrompt(data.prompt);
           if (data.fromCache) setStatusLine("Loaded from cache");
+          void loadHeroAssets(slug);
         } else {
           throw new Error("No prompt returned.");
         }
@@ -101,6 +124,7 @@ export function GameReversePage({ gameSlug, gameName }: GameReversePageProps) {
             if (event === "done" && typeof json.prompt === "string") {
               setPrompt(json.prompt);
               if (json.fromCache) setStatusLine("Loaded from cache");
+              void loadHeroAssets(slug);
             }
             if (event === "error" && typeof json.error === "string") {
               throw new Error(json.error);
@@ -117,7 +141,7 @@ export function GameReversePage({ gameSlug, gameName }: GameReversePageProps) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [loadHeroAssets]);
 
   useEffect(() => {
     if (started.current) return;
@@ -315,6 +339,35 @@ export function GameReversePage({ gameSlug, gameName }: GameReversePageProps) {
               <div className="max-h-[min(70vh,32rem)] overflow-auto rounded-lg border border-zinc-200 bg-white p-4 text-sm leading-relaxed text-zinc-800">
                 <PromptMarkdown>{prompt}</PromptMarkdown>
               </div>
+            </section>
+          </div>
+        ) : null}
+
+        {prompt ? (
+          <div className="relative w-full max-w-2xl">
+            <div className="absolute inset-0 translate-x-2 translate-y-2 rounded-xl bg-zinc-900" />
+            <section className="relative z-10 rounded-xl border-[3px] border-zinc-900 bg-[#fafafa] p-6">
+              {heroAssets.find((a) => a.kind === "humanoid") ? (
+                <HeroKernelPreview
+                  modelUrl={
+                    heroAssets.find((a) => a.kind === "humanoid")?.url ??
+                    undefined
+                  }
+                  title="Generated hero"
+                  subtitle={
+                    heroAssets.find((a) => a.kernel)
+                      ? "Auto-rigged to the Quaternius Universal skeleton"
+                      : "Textured sculpt (kernel bind pending)"
+                  }
+                  autoClip="Walk_Loop"
+                />
+              ) : (
+                <HeroKernelPreview
+                  title="Movement kernel"
+                  subtitle="Generated heroes are auto-rigged onto this Quaternius Universal rig and play these clips"
+                  autoClip="Walk_Loop"
+                />
+              )}
             </section>
           </div>
         ) : null}

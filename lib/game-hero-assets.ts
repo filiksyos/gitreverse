@@ -1,16 +1,18 @@
 import type { LlmTarget } from "@/lib/quick-llm";
 import { callQuickLlm } from "@/lib/quick-llm";
+import { generateTexturedGlb, getMeshyApiKey } from "@/lib/meshy-client";
+import { autoRigToQuaterniusKernel } from "@/lib/auto-rig-humanoid";
 import {
-  generateTexturedGlb,
-  getMeshyApiKey,
-  rigHumanoidWalk,
-} from "@/lib/meshy-client";
+  QUATERNIUS_KERNEL_ID,
+  QUATERNIUS_ROOT_MOTION_PUBLIC_PATH,
+  QUATERNIUS_STANDARD_PUBLIC_PATH,
+} from "@/lib/quaternius-kernel";
 import {
   type StoredHeroAsset,
   writeGameAssetFile,
   writeHeroAssetManifest,
 } from "@/lib/game-asset-storage";
-import { gameAssetFileUrl } from "@/lib/site-url";
+import { gameAssetFileUrl, getSiteBaseUrl } from "@/lib/site-url";
 
 export type HeroAssetKind = "humanoid" | "vehicle" | "prop";
 
@@ -58,14 +60,26 @@ export function appendGeneratedAssetsSection(
 
   const rows = assets
     .map((asset) => {
-      const note = asset.hasWalk
-        ? "rigged walk clip"
-        : asset.rigged
-          ? "rigged"
-          : "textured sculpt";
+      const note = asset.kernel
+        ? "Quaternius Universal kernel (Idle_Loop, Walk_Loop, Sprint_Loop, …)"
+        : asset.hasWalk
+          ? "rigged walk clip"
+          : asset.rigged
+            ? "rigged"
+            : "textured sculpt";
       return `| ${asset.id} | \`${asset.filename}\` | ${gameAssetFileUrl(slug, asset.filename)} | ${note} |`;
     })
     .join("\n");
+
+  const kernelHint = assets.some((a) => a.kernel)
+    ? `
+- Clips are already embedded. Drive them with Three.js \`AnimationMixer\` using these names: \`Idle_Loop\`, \`Walk_Loop\`, \`Jog_Fwd_Loop\`, \`Sprint_Loop\`, \`Jump_Start\` / \`Jump_Loop\` / \`Jump_Land\`, \`Punch_Jab\`, \`Sword_Attack\`, \`Death01\`.
+- Do not T-pose, invent keyframes, or replace the hero with boxes.
+- In-place locomotion is baked in. For traveling root motion, also load \`${getSiteBaseUrl()}${QUATERNIUS_ROOT_MOTION_PUBLIC_PATH}\` (same bone names).
+`
+    : `
+- Play the walk clip on humanoid heroes while moving. Pause it when idle.
+`;
 
   return `${base}
 
@@ -77,7 +91,7 @@ These GLBs were sculpted for this slice. Download them into \`public/models/\` a
 | --- | --- | --- | --- |
 ${rows}
 
-- Play the walk clip on humanoid heroes while moving. Pause it when idle.
+${kernelHint.trim()}
 - Keep buildings, roads, and repeating world dressing procedural.
 `;
 }
@@ -89,12 +103,17 @@ export function appendHeroAssetInstructions(
 ): string {
   if (!assets.length) return prompt;
   const lines = assets.map((asset) => {
-    const extra = asset.hasWalk
-      ? " (rigged; play the walk animation while moving)"
-      : "";
+    const extra = asset.kernel
+      ? " (Quaternius Universal rig; play Idle_Loop / Walk_Loop / Sprint_Loop — do not T-pose)"
+      : asset.hasWalk
+        ? " (rigged; play the walk animation while moving)"
+        : "";
     return `- ${asset.filename}${extra}: ${gameAssetFileUrl(slug, asset.filename)}`;
   });
-  const block = `Download these 3D models into public/models/ and load them with GLTFLoader. Do not rebuild these heroes from boxes.\n${lines.join("\n")}`;
+  const kernelLine = assets.some((a) => a.kernel)
+    ? `\nClip names: Idle_Loop (stand), Walk_Loop (move), Jog_Fwd_Loop, Sprint_Loop (run), Jump_Start then Jump_Loop then Jump_Land, Punch_Jab / Punch_Cross, Sword_Attack, Death01. Use AnimationMixer. Optional traveling locomotion: ${getSiteBaseUrl()}${QUATERNIUS_ROOT_MOTION_PUBLIC_PATH} (same skeleton). In-place kernel copy: ${getSiteBaseUrl()}${QUATERNIUS_STANDARD_PUBLIC_PATH}.`
+    : "";
+  const block = `Download these 3D models into public/models/ and load them with GLTFLoader. Do not rebuild these heroes from boxes.\n${lines.join("\n")}${kernelLine}`;
   const stripped = prompt
     .replace(
       /\n*Download these 3D models into public\/models\/[\s\S]*?(?=\n\nUse this game spec:|$)/i,
@@ -119,7 +138,7 @@ Rules:
 - 1 or 2 assets max. Prefer the player/army first, then one signature vehicle if the camera sits on it.
 - kind is humanoid, vehicle, or prop.
 - id is a short slug like player, car, knight.
-- prompt is a Meshy text-to-3D prompt: one object, full body or full vehicle, A-pose if humanoid, no scene, no extra people, readable game-ready sculpt.
+- prompt is a Meshy text-to-3D prompt: one object, full body or full vehicle, T-pose if humanoid, no scene, no extra people, readable game-ready sculpt.
 - Do not request buildings, trees, or a whole city.`,
     `Game: ${opts.gameName}\n\nGAME.md:\n${opts.specMd.slice(0, 6000)}`,
     800
@@ -156,7 +175,6 @@ Rules:
 }
 
 function heuristicPlan(gameName: string, specMd: string): PlannedAsset[] {
-  const text = specMd.toLowerCase();
   const is2d =
     /\b(canvas 2d|sprite sheet|side scroll|2d platform)/i.test(specMd) &&
     !/three\.js/i.test(specMd);
@@ -169,7 +187,7 @@ function heuristicPlan(gameName: string, specMd: string): PlannedAsset[] {
     {
       id: "player",
       kind: "humanoid",
-      prompt: `A single full-body game character from ${gameName}, standing in A-pose, arms slightly away from the torso, readable silhouette, detailed clothes, no weapons in hand, no background, no other people, game-ready sculpt`,
+      prompt: `A single full-body game character from ${gameName}, standing in T-pose, arms straight out to the sides, readable silhouette, detailed clothes, no weapons in hand, no background, no other people, game-ready sculpt`,
     },
   ];
 }
@@ -205,7 +223,7 @@ export async function generateHeroAssets(opts: {
     const sculpt = await generateTexturedGlb({
       apiKey,
       prompt: item.prompt,
-      poseMode: item.kind === "humanoid" ? "a-pose" : "",
+      poseMode: item.kind === "humanoid" ? "t-pose" : "",
       deadlineAt: opts.deadlineAt,
       onStatus: opts.onStatus,
     });
@@ -217,23 +235,20 @@ export async function generateHeroAssets(opts: {
     let bytes = sculpt.glb;
     let rigged = false;
     let hasWalk = false;
-    if (
-      item.kind === "humanoid" &&
-      sculpt.refineTaskId &&
-      (!opts.deadlineAt || opts.deadlineAt - Date.now() > 25_000)
-    ) {
-      const rig = await rigHumanoidWalk({
-        apiKey,
-        refineTaskId: sculpt.refineTaskId,
-        deadlineAt: opts.deadlineAt,
-        onStatus: opts.onStatus,
-      });
+    let kernel: StoredHeroAsset["kernel"] = null;
+    let clips: string[] = [];
+    if (item.kind === "humanoid") {
+      opts.onStatus?.("Auto-rigging Quaternius kernel");
+      const rig = await autoRigToQuaterniusKernel(sculpt.glb);
       if (rig.ok) {
         bytes = rig.glb;
         rigged = true;
-        hasWalk = true;
+        hasWalk = rig.clips.includes("Walk_Loop");
+        kernel = QUATERNIUS_KERNEL_ID;
+        clips = rig.clips;
+        opts.onStatus?.("Quaternius kernel bound (Idle_Loop / Walk_Loop)");
       } else {
-        console.warn(`[game-assets] ${item.id} rig failed: ${rig.error}`);
+        console.warn(`[game-assets] ${item.id} auto-rig failed: ${rig.error}`);
       }
     }
 
@@ -247,6 +262,8 @@ export async function generateHeroAssets(opts: {
         rigged,
         hasWalk,
         prompt: item.prompt,
+        kernel,
+        clips,
       });
     } catch (e) {
       console.warn(

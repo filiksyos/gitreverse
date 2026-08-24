@@ -19,6 +19,8 @@ export type StoredHeroAsset = {
   rigged: boolean;
   hasWalk: boolean;
   prompt: string;
+  kernel?: "quaternius-ual1" | null;
+  clips?: string[];
 };
 
 export type HeroAssetManifest = {

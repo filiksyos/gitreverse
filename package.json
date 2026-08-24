@@ -8,9 +8,13 @@
     "start": "next start",
     "lint": "eslint",
     "test:titles": "node --env-file=.env.local scripts/test-titles.mjs",
+    "test:kernel": "tsx --test scripts/test-quaternius-kernel.ts",
     "db:migrate:title": "node --env-file=.env.local scripts/apply-title-migration.mjs"
   },
   "dependencies": {
+    "@gltf-transform/core": "^4.4.2",
+    "@gltf-transform/extensions": "^4.4.2",
+    "@gltf-transform/functions": "^4.4.2",
     "@supabase/supabase-js": "^2.101.1",
     "@vercel/analytics": "^2.0.1",
     "context.dev": "^2.5.0",
@@ -19,6 +23,7 @@
     "react-dom": "19.2.4",
     "react-markdown": "^10.1.0",
     "stripe": "^17.7.0",
+    "three": "^0.185.1",
     "undici": "^8.1.0",
     "zod": "^4.4.3"
   },
@@ -27,9 +32,11 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/three": "^0.185.4",
     "eslint": "^9",
     "eslint-config-next": "16.2.1",
     "tailwindcss": "^4",
+    "tsx": "^4.23.12",
     "typescript": "^5"
   }
 }

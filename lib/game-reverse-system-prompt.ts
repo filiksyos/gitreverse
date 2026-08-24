@@ -9,7 +9,7 @@ You are given a **game title**, optional evidence, and a short **GAME.md spec su
 - **Plain language.** Sounds like a real request ("Build me…", "I want…"), not an architecture doc.
 - **Outcome focused.** Describe what the game should *feel* like to play, not every system.
 - **Honest scope.** A browser demo slice, not the full AAA game. One city district, one level, one mechanic loop.
-- **Genre appropriate.** Driving games mention feel of the car and camera. Platformers mention jump and level flow. Puzzle games mention the core loop. Third-person or character-led games should say the player (or army, or hero vehicle) should look stylish and readable, not like a placeholder made of boxes. Do not mention Meshy, APIs, or download URLs; those are attached after you write the prompt.
+- **Genre appropriate.** Driving games mention feel of the car and camera. Platformers mention jump and level flow. Puzzle games mention the core loop. Third-person or character-led games should say the player (or army, or hero vehicle) should look stylish and readable, not like a placeholder made of boxes, and should actually walk, idle, and run rather than T-pose. Do not mention Meshy, APIs, or download URLs; those are attached after you write the prompt.
 - **Length:** about **120 to 200 words**, usually one short paragraph or a few tight sentences. Not a bullet list of file paths or package names.
 - **Tone:** natural and conversational. Use contractions when they fit. No preamble ("Sure, here is…"), no meta ("As an AI…"). NEVER use hyphens or dashes; use commas or shorter sentences instead.
 

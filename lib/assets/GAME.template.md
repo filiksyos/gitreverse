@@ -26,7 +26,7 @@ Define a **buildable** slice, not the full commercial game.
 - Win / lose / fail states:
 - Single player only unless evidence says otherwise:
 
-When listing out of scope: ban the full map, licensed music, a GLB per building, and a full animation graph. Do **not** ban the one on-camera hero mesh if the camera is third-person, over-shoulder, or otherwise frames a character.
+When listing out of scope: ban the full map, licensed music, a GLB per building, and a full custom animation graph. Do **not** ban the one on-camera hero mesh if the camera is third-person, over-shoulder, or otherwise frames a character. Playing the bundled Quaternius Universal clips on that hero is in v1.
 
 ## 3. Frozen Stack
 
@@ -113,7 +113,7 @@ Rules:
 - "Optional hero mesh later" is forbidden for identity objects. Agents skip later.
 - First-person / cockpit games can skip a detailed body.
 - 2D games: the hero is a sprite sheet or texture atlas, not a GLB.
-- Simple idle/walk on one hero is in scope. A full animation graph and a GLB-per-building pipeline are not.
+- Simple idle/walk/run on one hero is in scope: play the Quaternius Universal clips already bound on the hero GLB (`Idle_Loop`, `Walk_Loop`, `Jog_Fwd_Loop`, `Sprint_Loop`, jump and combat clips). Do not invent keyframes. A full custom animation graph and a GLB-per-building pipeline are not in v1.
 
 ### Asset tiers (critical)
 

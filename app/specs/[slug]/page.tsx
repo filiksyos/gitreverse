@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { Navbar } from "@/components/navbar";
 import { PromptMarkdown } from "@/components/prompt-markdown";
+import { HeroKernelPreview } from "@/components/hero-kernel-preview";
 import { isValidGameSlug } from "@/lib/parse-game-input";
 import { readGameReverse } from "@/lib/game-reverse-storage";
 import { readHeroAssetManifest } from "@/lib/game-asset-storage";
@@ -24,6 +25,7 @@ export default async function GameSpecPage({ params }: PageProps) {
 
   const downloadHref = `/api/game-spec/${encodeURIComponent(slug)}?download=1`;
   const heroAssets = (await readHeroAssetManifest(slug))?.assets ?? [];
+  const heroPreview = heroAssets.find((asset) => asset.kind === "humanoid");
 
   return (
     <div className="flex min-h-screen flex-col bg-[#FFFDF8] text-zinc-900">
@@ -58,6 +60,20 @@ export default async function GameSpecPage({ params }: PageProps) {
             <div className="overflow-auto rounded-lg border border-zinc-200 bg-white p-4 text-sm leading-relaxed text-zinc-800">
               <PromptMarkdown>{cached.specMd}</PromptMarkdown>
             </div>
+            {heroPreview ? (
+              <div className="mt-4 border-t border-zinc-200 pt-4">
+                <HeroKernelPreview
+                  modelUrl={`/api/game-assets/${encodeURIComponent(slug)}/${encodeURIComponent(heroPreview.filename)}`}
+                  title="Generated hero"
+                  subtitle={
+                    heroPreview.kernel
+                      ? "Auto-rigged to the Quaternius Universal skeleton"
+                      : "Textured sculpt"
+                  }
+                  autoClip="Walk_Loop"
+                />
+              </div>
+            ) : null}
             {heroAssets.length > 0 ? (
               <div className="mt-4 border-t border-zinc-200 pt-4">
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
@@ -74,7 +90,11 @@ export default async function GameSpecPage({ params }: PageProps) {
                         Download {asset.filename}
                       </a>
                       <span className="ml-2 text-xs text-zinc-500">
-                        {asset.hasWalk ? "rigged walk" : "textured sculpt"}
+                        {asset.kernel
+                          ? "Quaternius kernel"
+                          : asset.hasWalk
+                            ? "rigged walk"
+                            : "textured sculpt"}
                       </span>
                     </li>
                   ))}
