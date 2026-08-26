@@ -2,6 +2,7 @@ import type { LlmTarget } from "@/lib/quick-llm";
 import { callQuickLlm } from "@/lib/quick-llm";
 import { generateTexturedGlb, getMeshyApiKey } from "@/lib/meshy-client";
 import { autoRigToQuaterniusKernel } from "@/lib/auto-rig-humanoid";
+import type { HeroProgressEvent } from "@/lib/meshy-progress";
 import {
   QUATERNIUS_KERNEL_ID,
   QUATERNIUS_ROOT_MOTION_PUBLIC_PATH,
@@ -192,6 +193,21 @@ function heuristicPlan(gameName: string, specMd: string): PlannedAsset[] {
   ];
 }
 
+function liveAssetUrl(slug: string, filename: string, rev: string): string {
+  return `/api/game-assets/${encodeURIComponent(slug)}/${encodeURIComponent(filename)}?v=${encodeURIComponent(rev)}`;
+}
+
+async function publishHeroGlb(
+  slug: string,
+  id: string,
+  bytes: Buffer,
+  rev: string
+): Promise<string> {
+  const filename = `${id}.glb`;
+  await writeGameAssetFile(slug, filename, bytes);
+  return liveAssetUrl(slug, filename, rev);
+}
+
 export async function generateHeroAssets(opts: {
   llm: LlmTarget;
   slug: string;
@@ -199,6 +215,7 @@ export async function generateHeroAssets(opts: {
   specMd: string;
   deadlineAt?: number;
   onStatus?: (message: string) => void;
+  onHero?: (event: HeroProgressEvent) => void;
 }): Promise<StoredHeroAsset[]> {
   const apiKey = getMeshyApiKey();
   if (!apiKey) {
@@ -220,15 +237,57 @@ export async function generateHeroAssets(opts: {
       console.warn(`[game-assets] ${item.id} skipped: not enough time left`);
       break;
     }
+
+    opts.onHero?.({
+      id: item.id,
+      kind: item.kind,
+      stage: "preview",
+      status: "PENDING",
+      progress: 0,
+    });
+
     const sculpt = await generateTexturedGlb({
       apiKey,
       prompt: item.prompt,
       poseMode: item.kind === "humanoid" ? "t-pose" : "",
       deadlineAt: opts.deadlineAt,
       onStatus: opts.onStatus,
+      onProgress: async (snap) => {
+        const event: HeroProgressEvent = {
+          id: item.id,
+          kind: item.kind,
+          stage: snap.stage,
+          status: snap.status,
+          progress: snap.progress,
+        };
+        if (snap.thumbnailUrl) event.thumbnailUrl = snap.thumbnailUrl;
+        if (snap.glb) {
+          try {
+            event.modelUrl = await publishHeroGlb(
+              opts.slug,
+              item.id,
+              snap.glb,
+              `${snap.stage}-${snap.progress}`
+            );
+          } catch (e) {
+            console.warn(
+              `[game-assets] ${item.id} live save failed:`,
+              e instanceof Error ? e.message : e
+            );
+          }
+        }
+        opts.onHero?.(event);
+      },
     });
     if (!sculpt.ok) {
       console.warn(`[game-assets] ${item.id} sculpt failed: ${sculpt.error}`);
+      opts.onHero?.({
+        id: item.id,
+        kind: item.kind,
+        stage: "failed",
+        status: "FAILED",
+        progress: 0,
+      });
       continue;
     }
 
@@ -239,6 +298,13 @@ export async function generateHeroAssets(opts: {
     let clips: string[] = [];
     if (item.kind === "humanoid") {
       opts.onStatus?.("Auto-rigging Quaternius kernel");
+      opts.onHero?.({
+        id: item.id,
+        kind: item.kind,
+        stage: "kernel",
+        status: "IN_PROGRESS",
+        progress: 90,
+      });
       const rig = await autoRigToQuaterniusKernel(sculpt.glb);
       if (rig.ok) {
         bytes = rig.glb;
@@ -254,7 +320,12 @@ export async function generateHeroAssets(opts: {
 
     const filename = `${item.id}.glb`;
     try {
-      await writeGameAssetFile(opts.slug, filename, bytes);
+      const modelUrl = await publishHeroGlb(
+        opts.slug,
+        item.id,
+        bytes,
+        rigged ? "kernel" : "ready"
+      );
       assets.push({
         id: item.id,
         filename,
@@ -265,11 +336,28 @@ export async function generateHeroAssets(opts: {
         kernel,
         clips,
       });
+      opts.onHero?.({
+        id: item.id,
+        kind: item.kind,
+        stage: "ready",
+        status: "SUCCEEDED",
+        progress: 100,
+        modelUrl,
+        kernel: Boolean(kernel),
+        clips,
+      });
     } catch (e) {
       console.warn(
         `[game-assets] ${item.id} save failed:`,
         e instanceof Error ? e.message : e
       );
+      opts.onHero?.({
+        id: item.id,
+        kind: item.kind,
+        stage: "failed",
+        status: "FAILED",
+        progress: 0,
+      });
     }
   }
 

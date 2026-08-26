@@ -18,6 +18,7 @@ import {
   generateHeroAssets,
 } from "@/lib/game-hero-assets";
 import { readHeroAssetManifest } from "@/lib/game-asset-storage";
+import type { HeroProgressEvent } from "@/lib/meshy-progress";
 
 export type GameReverseResult =
   | {
@@ -98,9 +99,10 @@ export async function ensureGameReversed(opts: {
   slug: string;
   gameName: string;
   onStatus?: (message: string) => void;
+  onHero?: (event: HeroProgressEvent) => void;
   force?: boolean;
 }): Promise<GameReverseResult> {
-  const { slug, gameName, onStatus, force } = opts;
+  const { slug, gameName, onStatus, onHero, force } = opts;
 
   if (!force) {
     const cached = await readGameReverse(slug);
@@ -189,6 +191,7 @@ export async function ensureGameReversed(opts: {
     specMd: specResult.text,
     deadlineAt: Date.now() + meshyBudgetMs,
     onStatus,
+    onHero,
   }).catch((e) => {
     console.warn(
       `[reverse-game] hero assets failed:`,
