@@ -111,8 +111,14 @@ export function HeroKernelPreview({
       if (disposed) return;
 
       const root = gltf.scene;
+      let skin: import("three").SkinnedMesh | null = null;
       root.traverse((obj) => {
-        const mesh = obj as import("three").Mesh;
+        const mesh = obj as import("three").SkinnedMesh;
+        if (mesh.isSkinnedMesh) {
+          mesh.bind(mesh.skeleton, mesh.bindMatrix);
+          mesh.frustumCulled = false;
+          if (!skin) skin = mesh;
+        }
         if (mesh.isMesh) {
           mesh.castShadow = true;
           mesh.receiveShadow = true;
@@ -124,10 +130,10 @@ export function HeroKernelPreview({
       const names = clips.map((c) => c.name).filter(Boolean);
       setAvailable(names.length ? names : [...KERNEL_PREVIEW_CLIPS]);
 
-      mixer = new THREE.AnimationMixer(root);
+      mixer = new THREE.AnimationMixer(skin ?? root);
       const actions = new Map<string, import("three").AnimationAction>();
       for (const c of clips) {
-        const action = mixer.clipAction(c);
+        const action = mixer.clipAction(c.clone());
         action.enabled = true;
         actions.set(c.name, action);
       }
