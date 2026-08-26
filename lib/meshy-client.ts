@@ -1,5 +1,7 @@
 import {
+  classifyMeshySsePayload,
   meshyTaskSnapshot,
+  shouldFallBackToPoll,
   type MeshyTaskSnapshot,
 } from "@/lib/meshy-progress";
 
@@ -127,21 +129,23 @@ async function applyStreamPayload(
 ): Promise<
   | { last: MeshyTask; terminal: false }
   | { last: MeshyTask; terminal: true; ok: true }
-  | { last: MeshyTask; terminal: true; ok: false; error: string }
+  | { last: MeshyTask; terminal: true; ok: false; taskFailed: true; error: string }
+  | { last: MeshyTask; terminal: true; ok: false; protocol: true; error: string }
 > {
   if (!payload || typeof payload !== "object") {
     return { last: last ?? {}, terminal: false };
   }
-  const task = payload as MeshyTask & { status_code?: number; message?: string };
-  if (typeof task.status_code === "number" && !task.status) {
+  const classified = classifyMeshySsePayload(payload);
+  if (classified.kind === "http-error") {
     return {
       last: last ?? {},
       terminal: true,
       ok: false,
-      error: task.message || "Meshy stream error",
+      protocol: true,
+      error: classified.message,
     };
   }
-  const merged = { ...last, ...task };
+  const merged = { ...last, ...(payload as MeshyTask) };
   await onProgress?.(meshyTaskSnapshot(merged));
   const status = meshyTaskSnapshot(merged).status;
   if (!isTerminal(status)) return { last: merged, terminal: false };
@@ -150,8 +154,29 @@ async function applyStreamPayload(
     last: merged,
     terminal: true,
     ok: false,
+    taskFailed: true,
     error: taskErrorMessage(merged) || `Meshy task ${status.toLowerCase()}`,
   };
+}
+
+type StreamWatchResult =
+  | { ok: true; task: MeshyTask }
+  | { ok: false; error: string; taskFailed?: boolean };
+
+async function finishStreamEvent(
+  applied: Awaited<ReturnType<typeof applyStreamPayload>>,
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  finishSucceeded: (task: MeshyTask) => Promise<StreamWatchResult>
+): Promise<StreamWatchResult | null> {
+  try {
+    await reader.cancel();
+  } catch {
+    // ignore
+  }
+  if (!applied.terminal) return null;
+  if (applied.ok) return finishSucceeded(applied.last);
+  if ("protocol" in applied && applied.protocol) return null;
+  return { ok: false, error: applied.error, taskFailed: true };
 }
 
 async function streamTextTo3dTask(opts: {
@@ -159,7 +184,7 @@ async function streamTextTo3dTask(opts: {
   apiKey: string;
   timeoutMs: number;
   onProgress?: (snapshot: MeshyTaskSnapshot) => void | Promise<void>;
-}): Promise<{ ok: true; task: MeshyTask } | { ok: false; error: string } | null> {
+}): Promise<StreamWatchResult | null> {
   if (opts.timeoutMs <= 0) return null;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), opts.timeoutMs);
@@ -202,13 +227,7 @@ async function streamTextTo3dTask(opts: {
         const applied = await applyStreamPayload(payload, last, opts.onProgress);
         last = applied.last;
         if (!applied.terminal) continue;
-        try {
-          await reader.cancel();
-        } catch {
-          // ignore
-        }
-        if (applied.ok) return finishSucceeded(applied.last);
-        return { ok: false, error: applied.error };
+        return finishStreamEvent(applied, reader, finishSucceeded);
       }
     }
 
@@ -217,8 +236,7 @@ async function streamTextTo3dTask(opts: {
       const applied = await applyStreamPayload(tail, last, opts.onProgress);
       last = applied.last;
       if (applied.terminal) {
-        if (applied.ok) return finishSucceeded(applied.last);
-        return { ok: false, error: applied.error };
+        return finishStreamEvent(applied, reader, finishSucceeded);
       }
     }
 
@@ -241,7 +259,9 @@ async function watchTextTo3dTask(opts: {
 }): Promise<{ ok: true; task: MeshyTask } | { ok: false; error: string }> {
   const started = Date.now();
   const streamed = await streamTextTo3dTask(opts);
-  if (streamed) return streamed;
+  if (!shouldFallBackToPoll(streamed)) {
+    return streamed as { ok: true; task: MeshyTask } | { ok: false; error: string };
+  }
   return pollTask({
     url: `${MESHY_BASE}/v2/text-to-3d/${opts.taskId}`,
     apiKey: opts.apiKey,

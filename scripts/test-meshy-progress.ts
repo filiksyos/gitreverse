@@ -5,6 +5,8 @@ import {
   mergeHeroProgress,
   meshyTaskSnapshot,
   parseHeroProgressEvent,
+  classifyMeshySsePayload,
+  shouldFallBackToPoll,
   type HeroProgressEvent,
 } from "../lib/meshy-progress";
 
@@ -95,4 +97,33 @@ test("mergeHeroProgress keeps earlier preview URLs when a later event omits them
   assert.equal(merged[0].progress, 12);
   assert.equal(merged[0].thumbnailUrl, first.thumbnailUrl);
   assert.equal(merged[0].modelUrl, first.modelUrl);
+});
+
+test("SSE status_code without task status is not a task failure", () => {
+  assert.equal(
+    classifyMeshySsePayload({ status_code: 200, progress: 0 }).kind,
+    "ignore"
+  );
+  assert.equal(
+    classifyMeshySsePayload({ id: "abc", progress: 12 }).kind,
+    "ignore"
+  );
+  const err = classifyMeshySsePayload({
+    status_code: 404,
+    message: "Task not found",
+  });
+  assert.equal(err.kind, "http-error");
+  assert.equal(
+    classifyMeshySsePayload({ status: "IN_PROGRESS", progress: 40, status_code: 200 })
+      .kind,
+    "task"
+  );
+});
+
+test("stream error falls back to poll unless the Meshy task FAILED or CANCELED", () => {
+  assert.equal(shouldFallBackToPoll(null), true);
+  assert.equal(shouldFallBackToPoll({ ok: false }), true);
+  assert.equal(shouldFallBackToPoll({ ok: false, taskFailed: false }), true);
+  assert.equal(shouldFallBackToPoll({ ok: true }), false);
+  assert.equal(shouldFallBackToPoll({ ok: false, taskFailed: true }), false);
 });

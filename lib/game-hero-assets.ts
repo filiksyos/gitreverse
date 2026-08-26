@@ -25,7 +25,7 @@ type PlannedAsset = {
 
 const ASSET_ID_RE = /^[a-z][a-z0-9-]{0,31}$/;
 const GENERATED_SECTION_RE =
-  /\n*## 10\. Generated hero assets[\s\S]*$/i;
+  /\n*## 10\. (?:Generated hero assets|Movement kernel)[\s\S]*$/i;
 
 function parseJsonObject(text: string): unknown {
   const trimmed = text
@@ -57,8 +57,6 @@ export function appendGeneratedAssetsSection(
   assets: StoredHeroAsset[]
 ): string {
   const base = stripGeneratedAssetsSection(specMd);
-  if (!assets.length) return base;
-
   const rows = assets
     .map((asset) => {
       const note = asset.kernel
@@ -72,15 +70,23 @@ export function appendGeneratedAssetsSection(
     })
     .join("\n");
 
-  const kernelHint = assets.some((a) => a.kernel)
-    ? `
-- Clips are already embedded. Drive them with Three.js \`AnimationMixer\` using these names: \`Idle_Loop\`, \`Walk_Loop\`, \`Jog_Fwd_Loop\`, \`Sprint_Loop\`, \`Jump_Start\` / \`Jump_Loop\` / \`Jump_Land\`, \`Punch_Jab\`, \`Sword_Attack\`, \`Death01\`.
+  const kernelHint = `
+- Clips are already embedded on kernel-rigged heroes. Drive them with Three.js \`AnimationMixer\` using these names: \`Idle_Loop\`, \`Walk_Loop\`, \`Jog_Fwd_Loop\`, \`Sprint_Loop\`, \`Jump_Start\` / \`Jump_Loop\` / \`Jump_Land\`, \`Punch_Jab\`, \`Sword_Attack\`, \`Death01\`.
 - Do not T-pose, invent keyframes, or replace the hero with boxes.
-- In-place locomotion is baked in. For traveling root motion, also load \`${getSiteBaseUrl()}${QUATERNIUS_ROOT_MOTION_PUBLIC_PATH}\` (same bone names).
-`
-    : `
-- Play the walk clip on humanoid heroes while moving. Pause it when idle.
+- In-place locomotion: \`${getSiteBaseUrl()}${QUATERNIUS_STANDARD_PUBLIC_PATH}\`. Traveling root motion: \`${getSiteBaseUrl()}${QUATERNIUS_ROOT_MOTION_PUBLIC_PATH}\` (same bone names).
 `;
+
+  if (!assets.length) {
+    return `${base}
+
+## 10. Movement kernel
+
+Humanoid heroes auto-rig onto the Quaternius Universal skeleton. Load the kernel GLB with Three.js \`GLTFLoader\` if no generated hero file is listed.
+
+${kernelHint.trim()}
+- Keep buildings, roads, and repeating world dressing procedural.
+`;
+  }
 
   return `${base}
 
@@ -102,7 +108,6 @@ export function appendHeroAssetInstructions(
   slug: string,
   assets: StoredHeroAsset[]
 ): string {
-  if (!assets.length) return prompt;
   const lines = assets.map((asset) => {
     const extra = asset.kernel
       ? " (Quaternius Universal rig; play Idle_Loop / Walk_Loop / Sprint_Loop — do not T-pose)"
@@ -111,10 +116,11 @@ export function appendHeroAssetInstructions(
         : "";
     return `- ${asset.filename}${extra}: ${gameAssetFileUrl(slug, asset.filename)}`;
   });
-  const kernelLine = assets.some((a) => a.kernel)
-    ? `\nClip names: Idle_Loop (stand), Walk_Loop (move), Jog_Fwd_Loop, Sprint_Loop (run), Jump_Start then Jump_Loop then Jump_Land, Punch_Jab / Punch_Cross, Sword_Attack, Death01. Use AnimationMixer. Optional traveling locomotion: ${getSiteBaseUrl()}${QUATERNIUS_ROOT_MOTION_PUBLIC_PATH} (same skeleton). In-place kernel copy: ${getSiteBaseUrl()}${QUATERNIUS_STANDARD_PUBLIC_PATH}.`
-    : "";
-  const block = `Download these 3D models into public/models/ and load them with GLTFLoader. Do not rebuild these heroes from boxes.\n${lines.join("\n")}${kernelLine}`;
+  const kernelLine = `Clip names: Idle_Loop (stand), Walk_Loop (move), Jog_Fwd_Loop, Sprint_Loop (run), Jump_Start then Jump_Loop then Jump_Land, Punch_Jab / Punch_Cross, Sword_Attack, Death01. Use AnimationMixer. Optional traveling locomotion: ${getSiteBaseUrl()}${QUATERNIUS_ROOT_MOTION_PUBLIC_PATH} (same skeleton). In-place kernel copy: ${getSiteBaseUrl()}${QUATERNIUS_STANDARD_PUBLIC_PATH}.`;
+  const downloads = lines.length
+    ? `${lines.join("\n")}\n${kernelLine}`
+    : `- Quaternius Universal kernel (auto-rig target; play Idle_Loop / Walk_Loop / Sprint_Loop — do not T-pose): ${getSiteBaseUrl()}${QUATERNIUS_STANDARD_PUBLIC_PATH}\n${kernelLine}`;
+  const block = `Download these 3D models into public/models/ and load them with GLTFLoader. Do not rebuild these heroes from boxes.\n${downloads}`;
   const stripped = prompt
     .replace(
       /\n*Download these 3D models into public\/models\/[\s\S]*?(?=\n\nUse this game spec:|$)/i,

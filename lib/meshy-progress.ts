@@ -98,6 +98,50 @@ export function parseHeroProgressEvent(
   return event;
 }
 
+export type MeshySseClassification =
+  | { kind: "task" }
+  | { kind: "http-error"; statusCode: number; message: string }
+  | { kind: "ignore" };
+
+/** Meshy message events can include status_code without a task status. That is not a task failure. */
+export function classifyMeshySsePayload(payload: unknown): MeshySseClassification {
+  if (!payload || typeof payload !== "object") return { kind: "ignore" };
+  const raw = payload as Record<string, unknown>;
+  const status = typeof raw.status === "string" ? raw.status.trim() : "";
+  const statusCode =
+    typeof raw.status_code === "number" && Number.isFinite(raw.status_code)
+      ? raw.status_code
+      : undefined;
+  if (status) return { kind: "task" };
+  if (statusCode !== undefined && statusCode >= 400) {
+    return {
+      kind: "http-error",
+      statusCode,
+      message:
+        typeof raw.message === "string" && raw.message.trim()
+          ? raw.message
+          : "Meshy stream error",
+    };
+  }
+  return { kind: "ignore" };
+}
+
+export type MeshyStreamResult =
+  | { ok: true }
+  | { ok: false; taskFailed?: boolean };
+
+/**
+ * Stream is optional. Poll unless the stream finished the Meshy task
+ * (SUCCEEDED) or the task itself FAILED/CANCELED.
+ */
+export function shouldFallBackToPoll(
+  streamed: MeshyStreamResult | null | undefined
+): boolean {
+  if (streamed == null) return true;
+  if (streamed.ok) return false;
+  return streamed.taskFailed !== true;
+}
+
 export function mergeHeroProgress(
   prev: HeroProgressEvent[],
   next: HeroProgressEvent
