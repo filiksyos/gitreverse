@@ -6,6 +6,10 @@ const nextConfig: NextConfig = {
   experimental: {
     optimizePackageImports: ["three"],
   },
+  outputFileTracingIncludes: {
+    "/api/reverse-game": ["./public/quaternius/**/*"],
+    "/api/game-kernel/fixture": ["./public/quaternius/**/*"],
+  },
   async redirects() {
     return [
       { source: "/play", destination: "/game", permanent: false },
