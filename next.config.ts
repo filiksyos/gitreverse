@@ -6,6 +6,12 @@ const nextConfig: NextConfig = {
   experimental: {
     optimizePackageImports: ["three"],
   },
+  async redirects() {
+    return [
+      { source: "/play", destination: "/game", permanent: false },
+      { source: "/play/:path*", destination: "/game", permanent: false },
+    ];
+  },
   async headers() {
     return [
       {
