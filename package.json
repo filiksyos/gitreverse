@@ -14,7 +14,6 @@
   "dependencies": {
     "@gltf-transform/core": "^4.4.2",
     "@gltf-transform/extensions": "^4.4.2",
-    "@gltf-transform/functions": "^4.4.2",
     "@supabase/supabase-js": "^2.101.1",
     "@vercel/analytics": "^2.0.1",
     "context.dev": "^2.5.0",

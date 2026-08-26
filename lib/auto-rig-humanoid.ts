@@ -7,13 +7,10 @@ import {
   type mat4,
   NodeIO,
   type Node as GltfNode,
+  type Texture,
+  type TextureInfo,
 } from "@gltf-transform/core";
 import { ALL_EXTENSIONS } from "@gltf-transform/extensions";
-import {
-  cloneDocument,
-  copyToDocument,
-  prune,
-} from "@gltf-transform/functions";
 import {
   isDeformJoint,
   QUATERNIUS_CLIPS,
@@ -408,6 +405,112 @@ function copyAccessorArray(
   return dest.createAccessor(name, buffer).setType(type).setArray(copy);
 }
 
+function copyTexture(dest: Document, src: Texture | null): Texture | null {
+  if (!src) return null;
+  const tex = dest.createTexture(src.getName());
+  const image = src.getImage();
+  if (image) tex.setImage(image);
+  const mime = src.getMimeType();
+  if (mime) tex.setMimeType(mime);
+  const uri = src.getURI();
+  if (uri) tex.setURI(uri);
+  return tex;
+}
+
+function copyTexInfo(
+  srcInfo: TextureInfo | null,
+  destInfo: TextureInfo | null
+): void {
+  if (!srcInfo || !destInfo) return;
+  destInfo.setTexCoord(srcInfo.getTexCoord());
+  destInfo.setMagFilter(srcInfo.getMagFilter());
+  destInfo.setMinFilter(srcInfo.getMinFilter());
+  destInfo.setWrapS(srcInfo.getWrapS());
+  destInfo.setWrapT(srcInfo.getWrapT());
+}
+
+function copyMaterial(
+  dest: Document,
+  src: Material,
+  cache: Map<Material, Material>
+): Material {
+  const existing = cache.get(src);
+  if (existing) return existing;
+
+  const m = dest
+    .createMaterial(src.getName())
+    .setBaseColorFactor(src.getBaseColorFactor())
+    .setMetallicFactor(src.getMetallicFactor())
+    .setRoughnessFactor(src.getRoughnessFactor())
+    .setEmissiveFactor(src.getEmissiveFactor())
+    .setAlphaMode(src.getAlphaMode())
+    .setAlphaCutoff(src.getAlphaCutoff())
+    .setDoubleSided(src.getDoubleSided())
+    .setNormalScale(src.getNormalScale())
+    .setOcclusionStrength(src.getOcclusionStrength());
+
+  const slots: Array<{
+    get: () => Texture | null;
+    set: (tex: Texture) => void;
+  }> = [
+    {
+      get: () => src.getBaseColorTexture(),
+      set: (tex) => {
+        m.setBaseColorTexture(tex);
+        copyTexInfo(src.getBaseColorTextureInfo(), m.getBaseColorTextureInfo());
+      },
+    },
+    {
+      get: () => src.getMetallicRoughnessTexture(),
+      set: (tex) => {
+        m.setMetallicRoughnessTexture(tex);
+        copyTexInfo(
+          src.getMetallicRoughnessTextureInfo(),
+          m.getMetallicRoughnessTextureInfo()
+        );
+      },
+    },
+    {
+      get: () => src.getNormalTexture(),
+      set: (tex) => {
+        m.setNormalTexture(tex);
+        copyTexInfo(src.getNormalTextureInfo(), m.getNormalTextureInfo());
+      },
+    },
+    {
+      get: () => src.getOcclusionTexture(),
+      set: (tex) => {
+        m.setOcclusionTexture(tex);
+        copyTexInfo(src.getOcclusionTextureInfo(), m.getOcclusionTextureInfo());
+      },
+    },
+    {
+      get: () => src.getEmissiveTexture(),
+      set: (tex) => {
+        m.setEmissiveTexture(tex);
+        copyTexInfo(src.getEmissiveTextureInfo(), m.getEmissiveTextureInfo());
+      },
+    },
+  ];
+
+  const textureCache = new Map<Texture, Texture>();
+  for (const slot of slots) {
+    const srcTex = slot.get();
+    if (!srcTex) continue;
+    let destTex = textureCache.get(srcTex);
+    if (!destTex) {
+      const copied = copyTexture(dest, srcTex);
+      if (!copied) continue;
+      textureCache.set(srcTex, copied);
+      destTex = copied;
+    }
+    slot.set(destTex);
+  }
+
+  cache.set(src, m);
+  return m;
+}
+
 /**
  * Bind an unrigged (or differently-rigged) mesh onto the Quaternius Universal
  * skeleton and pack the Standard kernel clips into the same GLB.
@@ -426,10 +529,10 @@ export async function autoRigToQuaterniusKernel(
 
   try {
     const reader = io();
-    const kernelDoc = await reader.readBinary(new Uint8Array(kernelBytes));
+    const dest = await reader.readBinary(new Uint8Array(kernelBytes));
     const meshDoc = await reader.readBinary(new Uint8Array(meshBytes));
 
-    const skin = kernelDoc.getRoot().listSkins()[0];
+    const skin = dest.getRoot().listSkins()[0];
     if (!skin) return { ok: false, error: "Quaternius kernel has no skin" };
     const joints = skin.listJoints();
     if (joints.length !== QUATERNIUS_JOINT_COUNT) {
@@ -478,23 +581,14 @@ export async function autoRigToQuaterniusKernel(
       }
     }
 
-    const dest = cloneDocument(kernelDoc);
     dest.setLogger(new Logger(Logger.Verbosity.ERROR));
     dest.getRoot().getAsset().generator = "gitreverse-quaternius-kernel";
-    const destSkin = dest.getRoot().listSkins()[0];
-    const destJoints = destSkin.listJoints();
+    const destJoints = skin.listJoints();
     const segments = buildBoneSegments(destJoints);
     const destBuffer =
       dest.getRoot().listBuffers()[0] ?? dest.createBuffer("kernel");
 
-    const materialMap = copyToDocument(
-      dest,
-      meshDoc,
-      meshDoc
-        .getRoot()
-        .listMaterials()
-        .filter(Boolean)
-    );
+    const materialMap = new Map<Material, Material>();
 
     const heroMesh = dest.createMesh("Hero");
     let vertexCount = 0;
@@ -584,10 +678,7 @@ export async function autoRigToQuaterniusKernel(
         );
       }
       if (prim.material) {
-        const copied = materialMap.get(prim.material);
-        if (copied && copied.propertyType === "Material") {
-          destPrim.setMaterial(copied as Material);
-        }
+        destPrim.setMaterial(copyMaterial(dest, prim.material, materialMap));
       }
       heroMesh.addPrimitive(destPrim);
     });
@@ -595,10 +686,10 @@ export async function autoRigToQuaterniusKernel(
     let bound = false;
     for (const node of dest.getRoot().listNodes()) {
       const mesh = node.getMesh();
-      if (mesh && (mesh.getName() === "Mannequin" || node.getSkin() === destSkin)) {
+        if (mesh && (mesh.getName() === "Mannequin" || node.getSkin() === skin)) {
         const old = mesh;
         node.setMesh(heroMesh);
-        node.setSkin(destSkin);
+        node.setSkin(skin);
         if (old && old !== heroMesh) old.dispose();
         bound = true;
       }
@@ -607,12 +698,10 @@ export async function autoRigToQuaterniusKernel(
       const armature =
         dest.getRoot().listNodes().find((n) => n.getName() === "Armature") ??
         dest.getRoot().listNodes()[0];
-      const heroNode = dest.createNode("Hero").setMesh(heroMesh).setSkin(destSkin);
+      const heroNode = dest.createNode("Hero").setMesh(heroMesh).setSkin(skin);
       if (armature) armature.addChild(heroNode);
       else dest.getRoot().listScenes()[0]?.addChild(heroNode);
     }
-
-    await dest.transform(prune({ keepLeaves: true }));
 
     const clips = dest
       .getRoot()
