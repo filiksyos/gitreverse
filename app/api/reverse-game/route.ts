@@ -68,6 +68,7 @@ async function executeGameReverse(opts: {
           gameName,
           force,
           onStatus: (message) => send("status", { message }),
+          onHero: (hero) => send("hero", hero),
         });
 
         if (!result.ok) {

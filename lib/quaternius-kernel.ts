@@ -158,6 +158,22 @@ export const GAME_ACTION_TO_CLIP: Record<string, QuaterniusClip | QuaterniusClip
   death: "Death01",
   swim: "Swim_Fwd_Loop",
   sit: "Sitting_Idle_Loop",
+  drive: "Driving_Loop",
+  enterSeat: "Sitting_Enter",
+  exitSeat: "Sitting_Exit",
+  interact: "Interact",
+  talk: "Idle_Talking_Loop",
+  pickup: "Interact",
+  dance: "Dance_Loop",
+  taunt: "Dance_Loop",
+  dive: "Roll",
+  header: ["Jump_Start", "Jump_Loop", "Jump_Land"],
+  pass: "Interact",
+  shot: "Interact",
+  tackle: "Interact",
+  foul: ["Hit_Chest", "Hit_Head", "Roll"],
+  celebration: "Dance_Loop",
+  keeperDive: "Roll",
 };
 
 /** POSIX join so this module stays browser-safe (no node:path). */
