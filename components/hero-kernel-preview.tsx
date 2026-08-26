@@ -12,6 +12,7 @@ type HeroKernelPreviewProps = {
   title?: string;
   subtitle?: string;
   autoClip?: QuaterniusClip;
+  compact?: boolean;
 };
 
 export function HeroKernelPreview({
@@ -19,6 +20,7 @@ export function HeroKernelPreview({
   title = "Quaternius kernel",
   subtitle,
   autoClip = "Idle_Loop",
+  compact = false,
 }: HeroKernelPreviewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [clip, setClip] = useState<string>(autoClip);
@@ -198,26 +200,32 @@ export function HeroKernelPreview({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h3 className="text-sm font-semibold text-zinc-700">{title}</h3>
-          <p className="mt-0.5 text-xs text-zinc-500">
-            {subtitle ?? "Quaternius Universal Animation Library kernel"}
+      {compact ? null : (
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold text-zinc-700">{title}</h3>
+            <p className="mt-0.5 text-xs text-zinc-500">
+              {subtitle ?? "Quaternius Universal Animation Library kernel"}
+            </p>
+          </div>
+          <p className="text-xs font-medium text-zinc-500" role="status">
+            {error ? error : status}
           </p>
         </div>
-        <p className="text-xs font-medium text-zinc-500" role="status">
-          {error ? error : status}
-        </p>
-      </div>
+      )}
       <div className="relative overflow-hidden rounded-lg border-[3px] border-zinc-900 bg-[#f6efe2]">
         <canvas
           ref={canvasRef}
-          className="block h-[22rem] w-full"
+          className={`block w-full ${compact ? "h-[16rem]" : "h-[22rem]"}`}
           aria-label="Animated hero preview"
         />
       </div>
       {error ? (
         <p className="text-sm text-red-700">{error}</p>
+      ) : compact ? (
+        <p className="text-xs font-medium text-zinc-500" role="status">
+          {status}
+        </p>
       ) : (
         <div className="flex flex-wrap gap-1.5">
           {clipButtons.map((name) => (

@@ -16,7 +16,7 @@ function corsHeaders(extra: Record<string, string> = {}): Record<string, string>
   };
 }
 
-export async function GET(_request: NextRequest, context: RouteContext) {
+export async function GET(request: NextRequest, context: RouteContext) {
   const { slug: rawSlug, file: rawFile } = await context.params;
   const slug = rawSlug.trim().toLowerCase();
   const filename = rawFile.trim();
@@ -37,8 +37,10 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     status: 200,
     headers: corsHeaders({
       "Content-Type": "model/gltf-binary",
-      "Content-Disposition": `attachment; filename="${filename}"`,
-      "Cache-Control": "public, max-age=86400, s-maxage=86400",
+      "Content-Disposition": `inline; filename="${filename}"`,
+      "Cache-Control": request.nextUrl.searchParams.has("v")
+        ? "private, no-store"
+        : "public, max-age=86400, s-maxage=86400",
     }),
   });
 }
