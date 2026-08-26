@@ -319,12 +319,6 @@ export function ReversePromptHome({
                   className="font-medium text-zinc-800 underline decoration-zinc-400 underline-offset-2 hover:text-zinc-950"
                 >
                   Games too.
-                </Link>{" "}
-                <Link
-                  href="/play"
-                  className="font-medium text-zinc-800 underline decoration-zinc-400 underline-offset-2 hover:text-zinc-950"
-                >
-                  Play Cinder Bay and Floodlight Eleven.
                 </Link>
               </p>
             </div>

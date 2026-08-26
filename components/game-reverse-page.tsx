@@ -4,10 +4,16 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { GameSpecFlavorText } from "@/components/game-spec-flavor-text";
 import { HeroKernelPreview } from "@/components/hero-kernel-preview";
+import { MeshyLiveStage } from "@/components/meshy-live-stage";
 import { Navbar } from "@/components/navbar";
 import { PromptMarkdown } from "@/components/prompt-markdown";
 import { nameToSlug, parseGameInput } from "@/lib/parse-game-input";
 import type { StoredHeroAsset } from "@/lib/game-asset-storage";
+import {
+  mergeHeroProgress,
+  parseHeroProgressEvent,
+  type HeroProgressEvent,
+} from "@/lib/meshy-progress";
 
 type GameReversePageProps = {
   gameSlug: string;
@@ -29,6 +35,7 @@ export function GameReversePage({ gameSlug, gameName }: GameReversePageProps) {
   const [heroAssets, setHeroAssets] = useState<
     Array<StoredHeroAsset & { url: string }>
   >([]);
+  const [liveHeroes, setLiveHeroes] = useState<HeroProgressEvent[]>([]);
   const started = useRef(false);
   const resultsRef = useRef<HTMLDivElement>(null);
 
@@ -53,6 +60,7 @@ export function GameReversePage({ gameSlug, gameName }: GameReversePageProps) {
     setError(null);
     setPrompt(null);
     setHeroAssets([]);
+    setLiveHeroes([]);
     setStatusLine("Checking if it's cached…");
 
     try {
@@ -116,10 +124,16 @@ export function GameReversePage({ gameSlug, gameName }: GameReversePageProps) {
               prompt?: string;
               fromCache?: boolean;
               error?: string;
-            };
+            } & Partial<HeroProgressEvent>;
 
             if (event === "status" && typeof json.message === "string") {
               setStatusLine(json.message);
+            }
+            if (event === "hero") {
+              const hero = parseHeroProgressEvent(json);
+              if (hero) {
+                setLiveHeroes((prev) => mergeHeroProgress(prev, hero));
+              }
             }
             if (event === "done" && typeof json.prompt === "string") {
               setPrompt(json.prompt);
@@ -303,6 +317,9 @@ export function GameReversePage({ gameSlug, gameName }: GameReversePageProps) {
               ) : null}
             </form>
           </div>
+          {loading && liveHeroes.length > 0 ? (
+            <MeshyLiveStage heroes={liveHeroes} />
+          ) : null}
         </div>
 
         {prompt ? (

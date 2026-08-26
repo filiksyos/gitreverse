@@ -2,7 +2,6 @@
 
 import { Navbar } from "@/components/navbar";
 import { HeroKernelPreview } from "@/components/hero-kernel-preview";
-import Link from "next/link";
 import {
   QUATERNIUS_ROOT_MOTION_PUBLIC_PATH,
   QUATERNIUS_STANDARD_PUBLIC_PATH,
@@ -25,17 +24,6 @@ export function KernelLabPage() {
             <code className="text-xs">
               {QUATERNIUS_ROOT_MOTION_PUBLIC_PATH}
             </code>
-            .
-          </p>
-          <p className="mt-3 text-sm text-zinc-600">
-            Play the slices:{" "}
-            <Link href="/play/openworld" className="font-medium underline underline-offset-2">
-              Cinder Bay
-            </Link>{" "}
-            and{" "}
-            <Link href="/play/football" className="font-medium underline underline-offset-2">
-              Floodlight Eleven
-            </Link>
             .
           </p>
         </div>
