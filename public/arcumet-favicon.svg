@@ -1,0 +1,29 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle with dark slate gradient -->
+  <defs>
+    <linearGradient id="bg-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0a0c12"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+    <linearGradient id="arc-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3b82f6"/>
+      <stop offset="100%" stop-color="#60a5fa"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Main circle background -->
+  <circle cx="32" cy="32" r="30" fill="url(#bg-gradient)" stroke="url(#arc-gradient)" stroke-width="2"/>
+
+  <!-- A letterform - stylized as arc/architectural element (electric blue) -->
+  <path d="M32 14 L18 50" stroke="url(#arc-gradient)" stroke-width="4" stroke-linecap="round"/>
+  <path d="M32 14 L46 50" stroke="url(#arc-gradient)" stroke-width="4" stroke-linecap="round"/>
+  <path d="M23 38 L41 38" stroke="url(#arc-gradient)" stroke-width="3" stroke-linecap="round"/>
+
+  <!-- Arc accent at top (bright white) -->
+  <path d="M22 22 Q32 12 42 22" stroke="#ffffff" stroke-width="2" stroke-linecap="round" fill="none"/>
+
+  <!-- Measurement nodes (white + blue) -->
+  <circle cx="32" cy="14" r="3" fill="#ffffff"/>
+  <circle cx="18" cy="50" r="2.5" fill="#60a5fa"/>
+  <circle cx="46" cy="50" r="2.5" fill="#60a5fa"/>
+</svg>

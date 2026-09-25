@@ -1,34 +1,32 @@
 import { track } from "@vercel/analytics";
 
-const CODERABBIT_AFFILIATE_URL = "https://coderabbit.link/filiksyos-destaw";
-const CODERABBIT_ICON_URL =
-  "https://www.coderabbit.ai/images/CR_mark_orange.svg";
+const ARCUMET_JOIN_URL = "https://arcumet.com/join/gitreverse";
+const ARCUMET_ICON_URL = "/arcumet-favicon.svg";
 
-type CodeRabbitBannerProps = {
+type ArcumetBannerProps = {
   className?: string;
   embedded?: boolean;
-  placement?:
-    | "home-card"
-    | "repo-card"
-    | "website-card";
+  placement?: "home-card" | "repo-card" | "website-card";
+  /** GitHub repository URL appended to the GitReverse referral link. */
+  repoUrl?: string;
 };
 
 const BANNER_COPY = {
   default: {
     title: "Cut code review time in half",
     subtitle:
-      "CodeRabbit catches bugs before merge — free trial, 2-click install.",
+      "Arcumet catches bugs before merge — free trial, 2-click install.",
     variant: "default",
   },
   build: {
     title: "Are you gonna build this?",
-    subtitle: "make sure you review the code using coderabbit",
+    subtitle: "make sure you review the code using arcumet",
     variant: "build",
   },
 } as const;
 
 function copyForPlacement(
-  placement: NonNullable<CodeRabbitBannerProps["placement"]>
+  placement: NonNullable<ArcumetBannerProps["placement"]>
 ) {
   if (placement === "repo-card" || placement === "website-card") {
     return BANNER_COPY.build;
@@ -36,18 +34,30 @@ function copyForPlacement(
   return BANNER_COPY.default;
 }
 
-export function CodeRabbitBanner({
+function arcumetHref(repoUrl?: string) {
+  const url = new URL(ARCUMET_JOIN_URL);
+  url.searchParams.set("utm_source", "gitreverse");
+  url.searchParams.set("utm_medium", "partner");
+  url.searchParams.set("utm_campaign", "launch");
+  const repo = repoUrl?.trim();
+  if (repo) url.searchParams.set("repo", repo);
+  return url.toString();
+}
+
+export function ArcumetBanner({
   className,
   embedded = false,
   placement,
-}: CodeRabbitBannerProps) {
+  repoUrl,
+}: ArcumetBannerProps) {
   const trackPlacement = placement ?? (embedded ? "home-card" : "repo-card");
   const copy = copyForPlacement(trackPlacement);
+  const href = arcumetHref(repoUrl);
   const content = (
     <>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src={CODERABBIT_ICON_URL}
+        src={ARCUMET_ICON_URL}
         alt=""
         width={32}
         height={32}
@@ -79,7 +89,7 @@ export function CodeRabbitBanner({
   );
 
   const trackClick = () =>
-    track("CodeRabbit Click", {
+    track("Arcumet Click", {
       placement: trackPlacement,
       variant: copy.variant,
     });
@@ -87,21 +97,21 @@ export function CodeRabbitBanner({
   if (embedded) {
     return (
       <a
-        href={CODERABBIT_AFFILIATE_URL}
+        href={href}
         target="_blank"
         rel="sponsored noopener noreferrer"
         onClick={trackClick}
         className={`group flex items-center gap-3 rounded-lg border-[2px] border-zinc-900/15 bg-white/70 px-3 py-2.5 transition-colors hover:bg-white ${className ?? ""}`}
       >
         {content}
-        <span className="sr-only">Sponsored — opens CodeRabbit in a new tab</span>
+        <span className="sr-only">Sponsored — opens Arcumet in a new tab</span>
       </a>
     );
   }
 
   return (
     <a
-      href={CODERABBIT_AFFILIATE_URL}
+      href={href}
       target="_blank"
       rel="sponsored noopener noreferrer"
       onClick={trackClick}
@@ -111,7 +121,7 @@ export function CodeRabbitBanner({
       <div className="relative z-10 flex items-center gap-3 rounded-lg border-[3px] border-zinc-900 bg-white px-4 py-3 transition-transform group-hover:-translate-x-px group-hover:-translate-y-px">
         {content}
       </div>
-      <span className="sr-only">Sponsored — opens CodeRabbit in a new tab</span>
+      <span className="sr-only">Sponsored — opens Arcumet in a new tab</span>
     </a>
   );
 }

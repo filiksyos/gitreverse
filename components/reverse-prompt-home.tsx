@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
-import { CodeRabbitBanner } from "@/components/coderabbit-banner";
+import { ArcumetBanner } from "@/components/arcumet-banner";
 import { Navbar } from "@/components/navbar";
 import { ReverseGenerationFlavorText } from "@/components/reverse-generation-flavor-text";
 import { useAuth } from "@/contexts/AuthContext";
@@ -606,10 +606,15 @@ export function ReversePromptHome({
                 </ReactMarkdown>
               </div>
               {!loading ? (
-                <CodeRabbitBanner
+                <ArcumetBanner
                   className="mt-4 w-full"
                   embedded
                   placement="repo-card"
+                  repoUrl={
+                    owner && repo
+                      ? `https://github.com/${owner}/${repo}`
+                      : undefined
+                  }
                 />
               ) : null}
             </section>

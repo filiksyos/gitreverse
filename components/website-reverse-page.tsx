@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CodeRabbitBanner } from "@/components/coderabbit-banner";
+import { ArcumetBanner } from "@/components/arcumet-banner";
 import { Navbar } from "@/components/navbar";
 import { PromptMarkdown } from "@/components/prompt-markdown";
 import { WebsiteDesignFlavorText } from "@/components/website-design-flavor-text";
@@ -312,7 +312,7 @@ export function WebsiteReversePage({
               <div className="max-h-[min(70vh,32rem)] overflow-auto rounded-lg border border-zinc-200 bg-white p-4 text-sm leading-relaxed text-zinc-800">
                 <PromptMarkdown>{prompt}</PromptMarkdown>
               </div>
-              <CodeRabbitBanner
+              <ArcumetBanner
                 className="mt-4 w-full"
                 embedded
                 placement="website-card"
