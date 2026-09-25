@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
-import { CodeRabbitBanner } from "@/components/coderabbit-banner";
+import { ArcumetBanner } from "@/components/arcumet-banner";
 import { Navbar } from "@/components/navbar";
 import { ReverseGenerationFlavorText } from "@/components/reverse-generation-flavor-text";
 import { useAuth } from "@/contexts/AuthContext";
@@ -605,11 +605,16 @@ export function ReversePromptHome({
                   {prompt}
                 </ReactMarkdown>
               </div>
-              {!loading ? (
-                <CodeRabbitBanner
+              {!loading && (!isHome || homeMode === "codebase") ? (
+                <ArcumetBanner
                   className="mt-4 w-full"
                   embedded
                   placement="repo-card"
+                  repoUrl={
+                    owner && repo
+                      ? `https://github.com/${owner}/${repo}`
+                      : undefined
+                  }
                 />
               ) : null}
             </section>
@@ -628,6 +633,17 @@ export function ReversePromptHome({
               className="font-medium text-[#d31611] underline decoration-[#d31611] underline-offset-2 transition-colors hover:text-[#b0120e] hover:decoration-[#b0120e]"
             >
               Filiksyos
+            </a>
+            <span className="mx-2 text-zinc-300" aria-hidden>
+              ·
+            </span>
+            <a
+              href="https://discord.gg/eHN86K7rBj"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-[#d31611] underline decoration-[#d31611] underline-offset-2 transition-colors hover:text-[#b0120e] hover:decoration-[#b0120e]"
+            >
+              Discord
             </a>
           </p>
         </footer>
