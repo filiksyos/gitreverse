@@ -1,7 +1,7 @@
 import { track } from "@vercel/analytics";
 
 const ARCUMET_JOIN_URL = "https://arcumet.com/join/gitreverse";
-const ARCUMET_ICON_URL = "/arcumet-favicon.svg";
+const ARCUMET_ICON_URL = "/arcumet-icon.png";
 
 type ArcumetBannerProps = {
   className?: string;
@@ -61,7 +61,7 @@ export function ArcumetBanner({
         alt=""
         width={32}
         height={32}
-        className={`shrink-0 ${embedded ? "h-7 w-7" : "h-8 w-8"}`}
+        className={`shrink-0 rounded-lg bg-[#0d0f14] object-cover ${embedded ? "h-7 w-7" : "h-8 w-8"}`}
         aria-hidden
       />
       <div className="min-w-0 flex-1">
@@ -79,7 +79,7 @@ export function ArcumetBanner({
         ) : null}
       </div>
       <span
-        className={`shrink-0 rounded border-[2px] border-zinc-900 bg-[#FF570A] font-semibold text-white ${
+        className={`shrink-0 rounded border-[2px] border-zinc-900 bg-[linear-gradient(135deg,#3c83f6_0%,#1d4ded_100%)] font-semibold text-white ${
           embedded ? "px-2.5 py-1 text-[11px]" : "px-3 py-1.5 text-xs"
         }`}
       >
