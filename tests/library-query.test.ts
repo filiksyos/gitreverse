@@ -27,7 +27,14 @@ function failure(message = "statement timeout") {
 function client(handler: (url: URL, init?: RequestInit) => Response | Promise<Response>) {
   return createClient("https://database.example", "test-publishable-key", {
     auth: { persistSession: false, autoRefreshToken: false },
-    global: { fetch: async (input, init) => handler(new URL(String(input)), init) },
+    global: { fetch: async (input, init) => {
+      const url = new URL(String(input));
+      // Existing behavior remains covered for database/application rollout skew.
+      if (url.pathname.endsWith("/rpc/library_keyword_search")) {
+        return Response.json({ code: "PGRST202", message: "Function not deployed" }, { status: 404 });
+      }
+      return handler(url, init);
+    } },
   });
 }
 
