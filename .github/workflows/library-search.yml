@@ -1,0 +1,35 @@
+name: Library search regressions
+
+on:
+  pull_request:
+    paths:
+      - 'lib/library-*.ts'
+      - 'lib/embeddings.ts'
+      - 'lib/azure-openai.ts'
+      - 'app/api/library/**'
+      - 'app/library/**'
+      - 'components/library-page.tsx'
+      - 'tests/library-*.test.ts'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/library-search.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  library-search:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.11.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test:library
+      - run: pnpm exec tsc --noEmit
+      - run: pnpm exec eslint lib/library-query.ts lib/library-types.ts app/api/library/route.ts app/library/page.tsx components/library-page.tsx tests/library-*.test.ts

@@ -8,6 +8,8 @@ import {
   type LibraryEntry,
   type SortOption,
   type LibraryKindFilter,
+  type LibraryEntryKind,
+  type LibraryResult,
 } from "@/lib/library-types";
 
 const VIEW_BOOST = 0.4;
@@ -44,6 +46,12 @@ function searchWords(raw: string): string[] {
     .split(/\s+/u)
     .map((w) => w.trim())
     .filter(Boolean);
+}
+
+/** Quote a raw PostgREST value; the client handles URL encoding afterwards. */
+function metadataMatch(columns: string[], word: string): string {
+  const pattern = `%${word}%`.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  return columns.map((column) => `${column}.ilike."${pattern}"`).join(",");
 }
 
 function previewPrompt(prompt: string | null | undefined): string {
@@ -166,16 +174,14 @@ async function fetchCodeSearch(
           // Avoid ilike on prompt — full-text scan blows past anon's 3s timeout.
           for (const word of words) {
             query = query.or(
-              `owner.ilike.%${word}%,repo.ilike.%${word}%,title.ilike.%${word}%`
+              metadataMatch(["owner", "repo", "title"], word)
             );
           }
           break;
         case "ilike-or": {
-          const clauses = words.flatMap((w) => [
-            `owner.ilike.%${w}%`,
-            `repo.ilike.%${w}%`,
-            `title.ilike.%${w}%`,
-          ]);
+          const clauses = words.map((word) =>
+            metadataMatch(["owner", "repo", "title"], word)
+          );
           query = query.or(clauses.join(","));
           break;
         }
@@ -185,33 +191,32 @@ async function fetchCodeSearch(
     return applyCodeSort(query, sort, words.length > 0).range(0, fetchLimit - 1);
   };
 
-  let strategy: FtsStrategy = "fts-plain";
-  let res = await runQuery(words.length > 0 ? "fts-plain" : undefined);
-  if (res.error) throw new Error(res.error.message);
+  const strategies: FtsStrategy[] = ["fts-plain"];
+  if (words.length > 1) strategies.push("fts-or");
+  if (words.length > 0) strategies.push("ilike-and");
+  if (words.length > 1) strategies.push("ilike-or");
 
-  if ((res.count ?? 0) === 0 && words.length > 1) {
-    strategy = "fts-or";
-    res = await runQuery("fts-or");
-    if (res.error) throw new Error(res.error.message);
+  let emptyResult: { rows: PromptRow[]; total: number; strategy: FtsStrategy } | undefined;
+  for (const strategy of strategies) {
+    try {
+      const res = await runQuery(words.length > 0 ? strategy : undefined);
+      if (res.error) throw new Error(res.error.message);
+      const result = {
+        rows: (res.data ?? []) as PromptRow[],
+        total: res.count ?? 0,
+        strategy,
+      };
+      if (result.rows.length > 0 || result.total > 0) return result;
+      emptyResult = result;
+    } catch (error) {
+      // A timed-out FTS query must still get the cheaper metadata fallback.
+      logSourceFailure("code", strategy, error);
+      // An earlier narrow zero-match response cannot prove a failed broader search is empty.
+      emptyResult = undefined;
+    }
   }
-
-  if ((res.count ?? 0) === 0 && words.length > 0) {
-    strategy = "ilike-and";
-    res = await runQuery("ilike-and");
-    if (res.error) throw new Error(res.error.message);
-  }
-
-  if ((res.count ?? 0) === 0 && words.length > 1) {
-    strategy = "ilike-or";
-    res = await runQuery("ilike-or");
-    if (res.error) throw new Error(res.error.message);
-  }
-
-  return {
-    rows: (res.data ?? []) as PromptRow[],
-    total: res.count ?? 0,
-    strategy,
-  };
+  if (emptyResult) return emptyResult;
+  throw new Error("Code search is temporarily unavailable.");
 }
 
 async function fetchWebsiteSearch(
@@ -228,7 +233,7 @@ async function fetchWebsiteSearch(
   if (words.length > 0) {
     // Metadata-only match — scanning prompt text times out under anon limits.
     for (const word of words) {
-      query = query.or(`slug.ilike.%${word}%,target_url.ilike.%${word}%`);
+      query = query.or(metadataMatch(["slug", "target_url"], word));
     }
   }
 
@@ -257,9 +262,9 @@ function scoreWebsiteSearch(row: WebsiteRow, search: string): number {
 async function fetchCodeHybrid(
   supabase: SupabaseClient,
   search: string,
-  fetchLimit: number
+  fetchLimit: number,
+  queryEmbed: number[]
 ): Promise<PromptRow[]> {
-  const queryEmbed = await embedText(search);
   const { data, error } = await supabase.rpc("hybrid_search", {
     query_text: search,
     query_embed: queryEmbed,
@@ -315,9 +320,9 @@ async function fetchCodeHybrid(
 
 async function hybridSearchCount(
   supabase: SupabaseClient,
-  search: string
+  search: string,
+  queryEmbed: number[]
 ): Promise<number> {
-  const queryEmbed = await embedText(search);
   const { data, error } = await supabase.rpc("hybrid_search_count", {
     query_text: search,
     query_embed: queryEmbed,
@@ -382,61 +387,50 @@ function logSourceFailure(
   );
 }
 
-async function safeBrowseSource<T>(
-  source: "code" | "website",
-  fetch: () => Promise<{ rows: T[]; total: number }>
-): Promise<{ rows: T[]; total: number }> {
+type SourceResult<T> =
+  | { ok: true; value: T }
+  | { ok: false; source: LibraryEntryKind };
+
+async function readSource<T>(
+  source: LibraryEntryKind,
+  operation: string,
+  fetch: () => Promise<T>
+): Promise<SourceResult<T>> {
   try {
-    return await fetch();
+    return { ok: true, value: await fetch() };
   } catch (error) {
-    logSourceFailure(source, "browse", error);
-    return { rows: [], total: 0 };
+    logSourceFailure(source, operation, error);
+    return { ok: false, source };
   }
 }
 
-async function safeSearchSource<T>(
-  source: "code" | "website",
-  fetch: () => Promise<{ rows: T[]; total: number }>
-): Promise<{ rows: T[]; total: number }> {
-  try {
-    return await fetch();
-  } catch (error) {
-    logSourceFailure(source, "search", error);
-    return { rows: [], total: 0 };
+function unavailableSources(results: SourceResult<unknown>[]): LibraryEntryKind[] {
+  if (results.every((result) => !result.ok)) {
+    throw new Error("The library is temporarily unavailable. Please try again.");
   }
+  return results.flatMap((result) => result.ok ? [] : [result.source]);
 }
 
-async function safeCodeSearch(
-  fetch: () => Promise<{ rows: PromptRow[]; total: number; strategy: FtsStrategy }>
-): Promise<{ rows: PromptRow[]; total: number; strategy: FtsStrategy }> {
-  try {
-    return await fetch();
-  } catch (error) {
-    logSourceFailure("code", "search", error);
-    return { rows: [], total: 0, strategy: "fts-plain" };
+async function searchCodeSource(opts: {
+  supabase: SupabaseClient;
+  search: string;
+  sort: SortOption;
+  useHybrid: boolean;
+}, fetchLimit: number): Promise<{ rows: PromptRow[]; total: number; strategy: string }> {
+  if (opts.useHybrid) {
+    try {
+      // Reuse the same vector for rows and count rather than paying for it twice.
+      const queryEmbed = await embedText(opts.search);
+      const [rows, total] = await Promise.all([
+        fetchCodeHybrid(opts.supabase, opts.search, fetchLimit, queryEmbed),
+        hybridSearchCount(opts.supabase, opts.search, queryEmbed),
+      ]);
+      if (rows.length > 0) return { rows, total, strategy: "hybrid" };
+    } catch (error) {
+      logSourceFailure("code", "hybrid search; falling back to keywords", error);
+    }
   }
-}
-
-async function safeHybridCodeRows(
-  fetch: () => Promise<PromptRow[]>
-): Promise<PromptRow[]> {
-  try {
-    return await fetch();
-  } catch (error) {
-    logSourceFailure("code", "hybrid search", error);
-    return [];
-  }
-}
-
-async function safeHybridCount(
-  fetch: () => Promise<number>
-): Promise<number> {
-  try {
-    return await fetch();
-  } catch (error) {
-    logSourceFailure("code", "hybrid count", error);
-    return 0;
-  }
+  return fetchCodeSearch(opts.supabase, opts.search, opts.sort, fetchLimit);
 }
 
 export async function browseLibrary(opts: {
@@ -445,7 +439,7 @@ export async function browseLibrary(opts: {
   page: number;
   limit: number;
   kind?: LibraryKindFilter;
-}): Promise<{ data: LibraryEntry[]; total: number }> {
+}): Promise<LibraryResult> {
   const kind = opts.kind ?? "all";
   const fetchLimit = mergeFetchLimit(opts.page, opts.limit);
 
@@ -472,18 +466,24 @@ export async function browseLibrary(opts: {
   }
 
   const [code, website] = await Promise.all([
-    safeBrowseSource("code", () =>
+    readSource("code", "browse", () =>
       fetchCodeBrowse(opts.supabase, opts.sort, fetchLimit)
     ),
-    safeBrowseSource("website", () =>
+    readSource("website", "browse", () =>
       fetchWebsiteBrowse(opts.supabase, opts.sort, fetchLimit)
     ),
   ]);
 
-  const merged = mergeBrowse(code.rows, website.rows, opts.sort);
+  const unavailable = unavailableSources([code, website]);
+  const merged = mergeBrowse(
+    code.ok ? code.value.rows : [],
+    website.ok ? website.value.rows : [],
+    opts.sort
+  );
   return {
     data: paginateLibraryEntries(merged, opts.page, opts.limit),
-    total: code.total + website.total,
+    total: (code.ok ? code.value.total : 0) + (website.ok ? website.value.total : 0),
+    ...(unavailable.length > 0 ? { unavailableSources: unavailable } : {}),
   };
 }
 
@@ -495,11 +495,7 @@ export async function searchLibrary(opts: {
   limit: number;
   useHybrid: boolean;
   kind?: LibraryKindFilter;
-}): Promise<{
-  data: LibraryEntry[];
-  total: number;
-  strategy: string;
-}> {
+}): Promise<LibraryResult & { strategy: string }> {
   const kind = opts.kind ?? "all";
   const fetchLimit = mergeFetchLimit(opts.page, opts.limit);
 
@@ -519,84 +515,39 @@ export async function searchLibrary(opts: {
   }
 
   if (kind === "code") {
-    if (opts.useHybrid) {
-      try {
-        const [codeRows, codeTotal] = await Promise.all([
-          fetchCodeHybrid(opts.supabase, opts.search, fetchLimit),
-          hybridSearchCount(opts.supabase, opts.search),
-        ]);
-        if (codeRows.length > 0) {
-          const merged = mergeSearch(codeRows, [], opts.search);
-          return {
-            data: paginateLibraryEntries(merged, opts.page, opts.limit),
-            total: codeTotal,
-            strategy: "hybrid",
-          };
-        }
-      } catch (error) {
-        console.error(
-          "[library] hybrid search failed, falling back to FTS:",
-          error instanceof Error ? error.message : error
-        );
-      }
-    }
-
-    const code = await fetchCodeSearch(
-      opts.supabase,
-      opts.search,
-      opts.sort,
-      fetchLimit
-    );
-    const merged = mergeSearch(code.rows, [], opts.search);
+    const code = await searchCodeSource(opts, fetchLimit);
     return {
-      data: paginateLibraryEntries(merged, opts.page, opts.limit),
+      data: paginateLibraryEntries(mergeSearch(code.rows, [], opts.search), opts.page, opts.limit),
       total: code.total,
       strategy: code.strategy,
     };
   }
 
-  if (opts.useHybrid) {
-    const [codeRows, website, codeTotal] = await Promise.all([
-      safeHybridCodeRows(() =>
-        fetchCodeHybrid(opts.supabase, opts.search, fetchLimit)
-      ),
-      safeSearchSource("website", () =>
-        fetchWebsiteSearch(opts.supabase, opts.search, opts.sort, fetchLimit)
-      ),
-      safeHybridCount(() => hybridSearchCount(opts.supabase, opts.search)),
-    ]);
-
-    if (codeRows.length > 0 || website.rows.length > 0) {
-      const merged = mergeSearch(codeRows, website.rows, opts.search);
-      return {
-        data: paginateLibraryEntries(merged, opts.page, opts.limit),
-        total: codeTotal + website.total,
-        strategy: "hybrid",
-      };
-    }
-  }
-
+  // Each source finishes its own fallback chain, regardless of the other source.
   const [code, website] = await Promise.all([
-    safeCodeSearch(() =>
-      fetchCodeSearch(opts.supabase, opts.search, opts.sort, fetchLimit)
-    ),
-    safeSearchSource("website", () =>
+    readSource("code", "search", () => searchCodeSource(opts, fetchLimit)),
+    readSource("website", "search", () =>
       fetchWebsiteSearch(opts.supabase, opts.search, opts.sort, fetchLimit)
     ),
   ]);
-
-  const merged = mergeSearch(code.rows, website.rows, opts.search);
+  const unavailable = unavailableSources([code, website]);
+  const merged = mergeSearch(
+    code.ok ? code.value.rows : [],
+    website.ok ? website.value.rows : [],
+    opts.search
+  );
   return {
     data: paginateLibraryEntries(merged, opts.page, opts.limit),
-    total: code.total + website.total,
-    strategy: code.strategy,
+    total: (code.ok ? code.value.total : 0) + (website.ok ? website.value.total : 0),
+    strategy: code.ok ? code.value.strategy : "website-metadata",
+    ...(unavailable.length > 0 ? { unavailableSources: unavailable } : {}),
   };
 }
 
 export async function fetchInitialLibrary(
   supabase: SupabaseClient,
   limit: number
-): Promise<{ data: LibraryEntry[]; total: number }> {
+): Promise<LibraryResult> {
   return browseLibrary({
     supabase,
     sort: "newest",

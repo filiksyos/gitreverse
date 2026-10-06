@@ -76,6 +76,9 @@ Open [http://localhost:3000](http://localhost:3000).
 pnpm build
 pnpm start
 pnpm lint
+pnpm test:library
 ```
+
+`test:library` runs credential-free regression tests for library filtering, source fallbacks, and outage handling.
 
 [Sponsor this readme](https://buy.stripe.com/dRmdRaaGu3es6Dz5sgg7e03)

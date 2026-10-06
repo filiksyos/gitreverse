@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { unstable_cache } from "next/cache";
+import type { LibraryResult } from "@/lib/library-types";
 import { fetchInitialLibrary } from "@/lib/library-query";
 import { getSupabase } from "@/lib/supabase";
 import { LibraryPage } from "@/components/library-page";
@@ -31,24 +32,23 @@ const INITIAL_LIMIT = 24;
 const getCachedInitialLibrary = unstable_cache(
   async () => {
     const supabase = getSupabase();
-    if (!supabase) return { data: [], total: 0 };
-    try {
-      return await fetchInitialLibrary(supabase, INITIAL_LIMIT);
-    } catch (error) {
-      console.error(
-        "[library] initial fetch failed:",
-        error instanceof Error ? error.message : error
-      );
-      return { data: [], total: 0 };
-    }
+    if (!supabase) throw new Error("Database unavailable.");
+    return fetchInitialLibrary(supabase, INITIAL_LIMIT);
   },
-  ["library-initial-newest-v3"],
+  ["library-initial-newest-v4"],
   { revalidate: 60 }
 );
 
 export default async function LibraryRoute() {
-  const { data: initialData, total: initialTotal } =
-    await getCachedInitialLibrary();
+  let initial: LibraryResult = { data: [], total: 0 };
+  let initialError: string | undefined;
+  try {
+    initial = await getCachedInitialLibrary();
+  } catch (error) {
+    console.error("[library] initial fetch failed:", error);
+    initialError = "The library is temporarily unavailable. Please try again.";
+  }
+  const { data: initialData, total: initialTotal } = initial;
 
   const collectionJsonLd = {
     "@context": "https://schema.org",
@@ -68,7 +68,12 @@ export default async function LibraryRoute() {
   return (
     <>
       <JsonLd data={collectionJsonLd} />
-      <LibraryPage initialData={initialData} initialTotal={initialTotal} />
+      <LibraryPage
+        initialData={initialData}
+        initialTotal={initialTotal}
+        initialUnavailableSources={initial.unavailableSources}
+        initialError={initialError}
+      />
     </>
   );
 }

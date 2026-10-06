@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test:titles": "node --env-file=.env.local scripts/test-titles.mjs",
-    "db:migrate:title": "node --env-file=.env.local scripts/apply-title-migration.mjs"
+    "db:migrate:title": "node --env-file=.env.local scripts/apply-title-migration.mjs",
+    "test:library": "node --import tsx --test tests/library-*.test.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.101.1",
@@ -30,6 +31,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.1",
     "tailwindcss": "^4",
+    "tsx": "4.23.15",
     "typescript": "^5"
   }
 }

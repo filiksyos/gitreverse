@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { Navbar } from "@/components/navbar";
-import type { LibraryEntry, SortOption } from "@/lib/library-types";
+import type { LibraryEntry, LibraryEntryKind, LibraryResult, SortOption } from "@/lib/library-types";
 
 const SORT_OPTIONS: SortOption[] = ["newest", "trending", "oldest"];
 
@@ -32,13 +32,21 @@ function relativeTime(iso: string): string {
 type LibraryPageProps = {
   initialData: LibraryEntry[];
   initialTotal: number;
+  initialUnavailableSources?: LibraryEntryKind[];
+  initialError?: string;
 };
 
-export function LibraryPage({ initialData, initialTotal }: LibraryPageProps) {
+export function LibraryPage({
+  initialData, initialTotal, initialUnavailableSources = [], initialError,
+}: LibraryPageProps) {
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<SortOption>("newest");
   const [entries, setEntries] = useState<LibraryEntry[]>(initialData);
   const [total, setTotal] = useState(initialTotal);
+  const [error, setError] = useState<string | undefined>(initialError);
+  const [unavailableSources, setUnavailableSources] = useState(initialUnavailableSources);
+  const requestRef = useRef(0);
+  const abortRef = useRef<AbortController | null>(null);
   const [page, setPage] = useState(0);
   const [isPending, startTransition] = useTransition();
   const [loadingMore, setLoadingMore] = useState(false);
@@ -58,22 +66,42 @@ export function LibraryPage({ initialData, initialTotal }: LibraryPageProps) {
         page: String(pageVal),
         limit: String(PAGE_SIZE),
       });
-      const res = await fetch(`/api/library?${params.toString()}`, {
-        // Browse responses are CDN-cached; search stays private/no-store server-side.
-        cache: searchVal ? "no-store" : "default",
-      });
-      if (!res.ok) return;
-      const json = (await res.json()) as {
-        data: LibraryEntry[];
-        total: number;
-      };
-      if (append) {
-        setEntries((prev) => [...prev, ...json.data]);
-      } else {
-        setEntries(json.data);
+      const requestId = ++requestRef.current;
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+      setError(undefined);
+      try {
+        const res = await fetch(`/api/library?${params.toString()}`, {
+          cache: searchVal ? "no-store" : "default",
+          signal: controller.signal,
+        });
+        if (!res.ok) throw new Error("Library request failed.");
+        const json = (await res.json()) as LibraryResult;
+        if (requestId !== requestRef.current) return;
+        if (append && json.unavailableSources?.length) {
+          // A changed source set shifts merged page offsets; retry from page zero.
+          setUnavailableSources(json.unavailableSources);
+          setError("Some results couldn’t be loaded. Please try again.");
+          return;
+        }
+        if (append) {
+          setEntries((prev) => [...prev, ...json.data]);
+        } else {
+          setEntries(json.data);
+        }
+        setTotal(json.total);
+        setUnavailableSources(json.unavailableSources ?? []);
+        setPage(pageVal);
+      } catch {
+        if (controller.signal.aborted || requestId !== requestRef.current) return;
+        setError("The library is temporarily unavailable. Please try again.");
+        if (!append) {
+          setEntries([]);
+          setTotal(0);
+          setUnavailableSources([]);
+        }
       }
-      setTotal(json.total);
-      setPage(pageVal);
     },
     []
   );
@@ -84,21 +112,27 @@ export function LibraryPage({ initialData, initialTotal }: LibraryPageProps) {
       isFirstRender.current = false;
       return;
     }
+    ++requestRef.current;
+    abortRef.current?.abort();
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     searchTimerRef.current = setTimeout(() => {
-      startTransition(() => {
-        void fetchPage(search, sort, 0, false);
+      startTransition(async () => {
+        await fetchPage(search, sort, 0, false);
       });
     }, 300);
     return () => {
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+      abortRef.current?.abort();
     };
   }, [search, sort, fetchPage]);
 
   async function handleLoadMore() {
     setLoadingMore(true);
-    await fetchPage(search, sort, page + 1, true);
-    setLoadingMore(false);
+    try {
+      await fetchPage(search, sort, page + 1, true);
+    } finally {
+      setLoadingMore(false);
+    }
   }
 
   const hasMore = entries.length < total;
@@ -114,7 +148,7 @@ export function LibraryPage({ initialData, initialTotal }: LibraryPageProps) {
             <div className="absolute inset-0 translate-x-1.5 translate-y-1.5 rounded-lg bg-zinc-900" />
             <div className="relative z-10 rounded-lg border-[3px] border-zinc-900 bg-[#d31611] px-4 py-1">
               <span className="text-sm font-bold text-white">
-                {total.toLocaleString()}+ prompts
+                {error ? "Prompt library" : `${total.toLocaleString()}+ prompts`}
               </span>
             </div>
           </div>
@@ -234,13 +268,27 @@ export function LibraryPage({ initialData, initialTotal }: LibraryPageProps) {
           </div>
         </a>
 
+        {(error || unavailableSources.length > 0) && (
+          <div role="alert" className="rounded-lg border-2 border-amber-500 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+            <p>{error || `Some results are unavailable (${unavailableSources.join(", ")}). Showing results from the available sources.`}</p>
+            <button
+              type="button"
+              className="mt-2 font-semibold underline disabled:opacity-50"
+              disabled={isPending || loadingMore}
+              onClick={() => startTransition(async () => { await fetchPage(search, sort, 0, false); })}
+            >
+              Try again
+            </button>
+          </div>
+        )}
+
         {/* Count line */}
-        {search ? (
+        {search && !error ? (
           <p className="text-sm text-zinc-500">
             <span className="font-semibold text-zinc-900">
               {total.toLocaleString()}
             </span>{" "}
-            result{total !== 1 ? "s" : ""}
+            result{total !== 1 ? "s" : ""}{unavailableSources.length > 0 ? " from available sources" : ""}
           </p>
         ) : null}
 
@@ -251,8 +299,12 @@ export function LibraryPage({ initialData, initialTotal }: LibraryPageProps) {
           ) : (
             <div className="flex flex-col items-center gap-3 py-24 text-center">
               <span className="text-4xl">∅</span>
-              <p className="text-lg font-semibold text-zinc-700">No prompts found</p>
-              <p className="text-zinc-500">Try a different search term.</p>
+              <p className="text-lg font-semibold text-zinc-700">
+                {error ? "Couldn’t load prompts" : unavailableSources.length > 0 ? "Some results couldn’t be loaded" : "No prompts found"}
+              </p>
+              <p className="text-zinc-500">
+                {error || unavailableSources.length > 0 ? "Please try again in a moment." : "Try a different search term."}
+              </p>
             </div>
           )
         ) : (
@@ -264,12 +316,12 @@ export function LibraryPage({ initialData, initialTotal }: LibraryPageProps) {
         )}
 
         {/* Load more */}
-        {hasMore && (
+        {hasMore && !error && unavailableSources.length === 0 && (
           <div className="flex justify-center pt-2">
             <button
               type="button"
               onClick={handleLoadMore}
-              disabled={loadingMore}
+              disabled={loadingMore || isPending}
               className="flex items-center gap-2 rounded-lg border-[3px] border-zinc-900 bg-[#fff4da] px-8 py-3 font-semibold text-zinc-900 hover:bg-[#ffc480] transition-colors disabled:pointer-events-none disabled:opacity-60"
             >
               {loadingMore ? (

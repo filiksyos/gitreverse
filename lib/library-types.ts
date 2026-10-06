@@ -20,6 +20,13 @@ export type LibraryEntry = {
   target_url?: string;
 };
 
+export type LibraryResult = {
+  data: LibraryEntry[];
+  /** Count for the available sources only when unavailableSources is present. */
+  total: number;
+  unavailableSources?: LibraryEntryKind[];
+};
+
 export type SortOption = "trending" | "newest" | "oldest";
 
 export function hostnameFromUrl(url: string, fallback: string): string {

@@ -55,12 +55,17 @@ export async function GET(req: NextRequest) {
       {
         headers: {
           // Browse is cacheable; keep CDN warm so Library navigations stay fast.
-          "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300",
+          "Cache-Control": result.unavailableSources?.length
+            ? "private, no-store"
+            : "public, s-maxage=60, stale-while-revalidate=300",
         },
       }
     );
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Search failed.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error("[library] request failed:", error);
+    return NextResponse.json(
+      { error: "The library is temporarily unavailable. Please try again." },
+      { status: 503, headers: { "Cache-Control": "private, no-store" } }
+    );
   }
 }
