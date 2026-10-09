@@ -23,15 +23,18 @@ test("Premium cancellation excludes sponsorships, unknown prices and mixed subsc
   assert.equal(isPremiumOnlySubscription(subscription([])), false);
 });
 
-test("website reverse replaces its sponsor and keeps codebase sponsorship unchanged", () => {
+test("website and codebase reverse both show the original CodeRabbit ad", () => {
   const website = readFileSync("components/website-reverse-page.tsx", "utf8");
   const codebase = readFileSync("components/reverse-prompt-home.tsx", "utf8");
-  const banner = readFileSync("components/afterpack-banner.tsx", "utf8");
-  assert.match(website, /AfterpackBanner/);
-  assert.doesNotMatch(website, /CodeRabbitBanner/);
+  assert.match(website, /CodeRabbitBanner/);
+  assert.match(website, /embedded placement="website-card"/);
+  assert.doesNotMatch(website, /Afterpack|afterpack/);
   assert.match(codebase, /CodeRabbitBanner/);
-  assert.match(banner, /https:\/\/afterpack.dev/);
-  assert.match(banner, /Wanna make your site irreversible\?/);
+  const banner = readFileSync("components/coderabbit-banner.tsx", "utf8");
+  assert.match(banner, /https:\/\/coderabbit.link\/filiksyos-destaw/);
+  assert.match(banner, /Are you gonna build this\?/);
+  assert.match(banner, /make sure you review the code using coderabbit/);
+  assert.match(banner, /Try free/);
 });
 
 test("sponsor page uses owner snapshot and doesn't claim payment from a URL", () => {
@@ -82,25 +85,3 @@ test("home footer preserves Discord while claim card sits below the example repo
 });
 
 
-test("website sponsor includes the official local Afterpack logo", () => {
-  const banner = readFileSync("components/afterpack-banner.tsx", "utf8");
-  assert.match(banner, /src="\/sponsors\/afterpack-mark\.png"/);
-  assert.ok(readFileSync("public/sponsors/afterpack-mark.png").length > 100);
-  assert.match(banner, /alt="Afterpack"/);
-  const logo = readFileSync("public/sponsors/afterpack.svg", "utf8");
-  assert.match(logo, /viewBox="0 0 152 34"/);
-  assert.doesNotMatch(logo, /<script|<foreignObject|https?:\/\/(?!www\.w3\.org)/i);
-});
-
-
-test("Afterpack sponsor matches CodeRabbit embedded styling and uses the requested copy", () => {
-  const afterpack = readFileSync("components/afterpack-banner.tsx", "utf8");
-  const coderabbit = readFileSync("components/coderabbit-banner.tsx", "utf8");
-  for (const style of ["border-[2px] border-zinc-900/15 bg-white/70", "bg-[#FF570A]", "px-3 py-2.5", "Try free"]) {
-    assert.ok(afterpack.includes(style));
-    assert.ok(coderabbit.includes(style));
-  }
-  assert.match(afterpack, /Wanna make your site irreversible\?/);
-  assert.match(afterpack, /Make sure you use Afterpack/);
-  assert.doesNotMatch(afterpack, /Sponsor this spot|\/sponsor"/);
-});
