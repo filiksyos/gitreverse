@@ -33,6 +33,18 @@ AS $function$
     SELECT 'previous_calendar_month'::text,
       month_start - interval '1 month', month_start, measured
     FROM bounds
+  ), filtered AS MATERIALIZED (
+    -- Read and canonical-filter the union of both windows only once.
+    SELECT e.event_timestamp,
+      (e.event_timestamp AT TIME ZONE 'UTC')::date AS event_date,
+      e.device_id
+    FROM public.vercel_analytics_events_raw AS e
+    WHERE e.project_id = 'prj_z7TUohej5S9f0TFdK6BKZX0FkDaF'
+      AND e.vercel_environment = 'production'
+      AND e.event_type = 'pageview'
+      AND e.origin ~ '^https://(www\.)?gitreverse\.com([/?#]|$)'
+      AND e.event_timestamp >= (SELECT min(start_at) FROM windows)
+      AND e.event_timestamp < (SELECT max(end_at) FROM windows)
   )
   SELECT w.key, w.start_at, w.end_at,
     a.daily_unique_visits, a.raw_pageview_events,
@@ -41,20 +53,22 @@ AS $function$
   FROM windows AS w
   CROSS JOIN LATERAL (
     SELECT
-      count(DISTINCT ((e.event_timestamp AT TIME ZONE 'UTC')::date, e.device_id))
-        FILTER (WHERE e.device_id IS NOT NULL) AS daily_unique_visits,
-      count(*) AS raw_pageview_events,
-      min(e.event_timestamp) AS first_event_at,
-      max(e.event_timestamp) AS latest_event_at,
-      count(DISTINCT (e.event_timestamp AT TIME ZONE 'UTC')::date) AS active_utc_dates,
-      count(*) FILTER (WHERE e.device_id IS NULL) AS missing_device_events
-    FROM public.vercel_analytics_events_raw AS e
-    WHERE e.project_id = 'prj_z7TUohej5S9f0TFdK6BKZX0FkDaF'
-      AND e.vercel_environment = 'production'
-      AND e.event_type = 'pageview'
-      AND e.origin ~ '^https://(www\.)?gitreverse\.com([/?#]|$)'
-      AND e.event_timestamp >= w.start_at
-      AND e.event_timestamp < w.end_at
+      count(*) FILTER (WHERE device_id IS NOT NULL) AS daily_unique_visits,
+      coalesce(sum(event_count), 0)::bigint AS raw_pageview_events,
+      min(first_at) AS first_event_at,
+      max(latest_at) AS latest_event_at,
+      count(DISTINCT event_date) AS active_utc_dates,
+      coalesce(sum(event_count) FILTER (WHERE device_id IS NULL), 0)::bigint
+        AS missing_device_events
+    FROM (
+      -- Scalar grouping avoids expensive composite COUNT(DISTINCT) comparison.
+      -- Keep null-device groups for raw-event and missing-device totals.
+      SELECT e.event_date, e.device_id, count(*) AS event_count,
+        min(e.event_timestamp) AS first_at, max(e.event_timestamp) AS latest_at
+      FROM filtered AS e
+      WHERE e.event_timestamp >= w.start_at AND e.event_timestamp < w.end_at
+      GROUP BY e.event_date, e.device_id
+    ) AS daily_devices
   ) AS a;
 $function$;
 
