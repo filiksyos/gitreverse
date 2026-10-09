@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'lib/library-*.ts'
+      - 'supabase/migrations/*library*.sql'
       - 'lib/embeddings.ts'
       - 'lib/azure-openai.ts'
       - 'app/api/library/**'
