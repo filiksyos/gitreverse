@@ -68,20 +68,15 @@ test("sponsor page has requested audience snapshot and logos, with contact only 
 });
 
 
-test("home footer preserves Discord while claim card sits below the example repos", () => {
+test("home footer places Advertise beside Discord without a repo-example ad card", () => {
   const home = readFileSync("components/reverse-prompt-home.tsx", "utf8");
   const footer = home.slice(home.indexOf("<footer"), home.indexOf("</footer>"));
   assert.match(footer, /href="https:\/\/discord\.gg\/eHN86K7rBj"/);
   assert.match(footer, /Discord/);
-  assert.doesNotMatch(footer, /Advertise|Claim spot/);
   assert.match(footer, /href="https:\/\/filiksyos.com"/);
-  const examplesEnd = home.indexOf("Advertise your website");
-  assert.ok(examplesEnd > home.indexOf("Try example repos:"));
-  assert.ok(examplesEnd < home.indexOf("</form>"));
-  const card = home.slice(examplesEnd, home.indexOf("</form>"));
-  assert.match(card, /href="\/sponsor"/);
-  assert.match(card, /Claim spot/);
-  assert.doesNotMatch(home, /Sponsor this spot/);
+  assert.match(footer, /href="\/sponsor"/);
+  assert.ok(footer.indexOf("Advertise") > footer.indexOf("Discord"));
+  assert.doesNotMatch(home, /Advertise your website|Claim spot|Sponsor this spot/);
+  assert.match(home, /Try example repos:/);
+  assert.doesNotMatch(home.slice(0, home.indexOf("<footer")), /href="\/sponsor"/);
 });
-
-
