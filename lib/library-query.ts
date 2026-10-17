@@ -151,7 +151,7 @@ async function fetchCodeSearch(
 ): Promise<{ rows: PromptRow[]; total: number; strategy: FtsStrategy }> {
   const words = searchWords(search);
 
-  const runQuery = (strategy?: FtsStrategy) => {
+  const runLegacyQuery = (strategy?: FtsStrategy) => {
     let query = supabase
       .from(CODE_TABLE)
       .select(CODE_COLUMNS, { count: "exact" });
@@ -189,6 +189,26 @@ async function fetchCodeSearch(
     }
 
     return applyCodeSort(query, sort, words.length > 0).range(0, fetchLimit - 1);
+  };
+
+  const runQuery = async (strategy?: FtsStrategy) => {
+    const { data, error } = await supabase.rpc("library_keyword_search", {
+      query_text: search,
+      query_words: words,
+      search_strategy: strategy ?? "fts-plain",
+      sort_mode: sort === "newest" || sort === "oldest" ? sort : "trending",
+      match_count: fetchLimit,
+    });
+    // Allow application and database rollouts in either order. Other RPC errors
+    // remain failures and must not silently fall back to the expensive query plan.
+    if (error?.code === "PGRST202") {
+      return runLegacyQuery(strategy);
+    }
+    if (error) return { data: null, count: null, error };
+    if (!data || !Array.isArray(data.rows) || typeof data.total !== "number") {
+      throw new Error("Keyword search returned an invalid response.");
+    }
+    return { data: data.rows, count: data.total, error: null };
   };
 
   const strategies: FtsStrategy[] = ["fts-plain"];
