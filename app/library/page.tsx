@@ -35,7 +35,7 @@ const getCachedInitialLibrary = unstable_cache(
     if (!supabase) throw new Error("Database unavailable.");
     return fetchInitialLibrary(supabase, INITIAL_LIMIT);
   },
-  ["library-initial-newest-v4"],
+  ["library-initial-newest-v5"],
   { revalidate: 60 }
 );
 
@@ -57,7 +57,7 @@ export default async function LibraryRoute() {
     description:
       "Browse reverse-engineered coding agent prompts from GitHub repositories and live websites.",
     url: "https://gitreverse.com/library",
-    numberOfItems: initialTotal,
+    numberOfItems: initial.totalIsEstimate ? undefined : initialTotal,
     hasPart: initialData.slice(0, 10).map((entry) => ({
       "@type": "TechArticle",
       name: entry.title,
@@ -71,6 +71,8 @@ export default async function LibraryRoute() {
       <LibraryPage
         initialData={initialData}
         initialTotal={initialTotal}
+        initialTotalIsEstimate={initial.totalIsEstimate}
+        initialHasMore={initial.hasMore}
         initialUnavailableSources={initial.unavailableSources}
         initialError={initialError}
       />

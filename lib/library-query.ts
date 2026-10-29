@@ -116,15 +116,17 @@ async function fetchCodeBrowse(
   supabase: SupabaseClient,
   sort: SortOption,
   fetchLimit: number
-): Promise<{ rows: PromptRow[]; total: number }> {
+): Promise<CountedCodeRows> {
+  // Exact code-cache counts regularly exceed anon's 3s timeout, discarding
+  // otherwise fast indexed pages. Planner estimates avoid the full count scan.
   const { data, count, error } = await applyCodeSort(
-    supabase.from(CODE_TABLE).select(CODE_COLUMNS, { count: "exact" }),
+    supabase.from(CODE_TABLE).select(CODE_COLUMNS, { count: "planned" }),
     sort,
     false
   ).range(0, fetchLimit - 1);
 
   if (error) throw new Error(error.message);
-  return { rows: (data ?? []) as PromptRow[], total: count ?? 0 };
+  return countedCodeRows(data as PromptRow[] | null, count);
 }
 
 async function fetchWebsiteBrowse(
@@ -141,6 +143,21 @@ async function fetchWebsiteBrowse(
   return { rows: (data ?? []) as WebsiteRow[], total: count ?? 0 };
 }
 
+type CountedCodeRows = {
+  rows: PromptRow[];
+  total: number;
+  totalIsEstimate?: true;
+};
+
+function countedCodeRows(data: PromptRow[] | null, count: number | null): CountedCodeRows {
+  const rows = data ?? [];
+  // Estimates can be stale or overestimate zero-match predicates. Returned rows
+  // are the authority for availability and the minimum total, never the estimate.
+  return rows.length === 0
+    ? { rows, total: 0 }
+    : { rows, total: Math.max(rows.length, count ?? 0), totalIsEstimate: true };
+}
+
 type FtsStrategy = "fts-plain" | "fts-or" | "ilike-and" | "ilike-or";
 
 async function fetchCodeSearch(
@@ -148,13 +165,13 @@ async function fetchCodeSearch(
   search: string,
   sort: SortOption,
   fetchLimit: number
-): Promise<{ rows: PromptRow[]; total: number; strategy: FtsStrategy }> {
+): Promise<CountedCodeRows & { strategy: FtsStrategy }> {
   const words = searchWords(search);
 
   const runQuery = (strategy?: FtsStrategy) => {
     let query = supabase
       .from(CODE_TABLE)
-      .select(CODE_COLUMNS, { count: "exact" });
+      .select(CODE_COLUMNS, { count: "planned" });
 
     if (words.length > 0 && strategy) {
       switch (strategy) {
@@ -196,14 +213,13 @@ async function fetchCodeSearch(
   if (words.length > 0) strategies.push("ilike-and");
   if (words.length > 1) strategies.push("ilike-or");
 
-  let emptyResult: { rows: PromptRow[]; total: number; strategy: FtsStrategy } | undefined;
+  let emptyResult: (CountedCodeRows & { strategy: FtsStrategy }) | undefined;
   for (const strategy of strategies) {
     try {
       const res = await runQuery(words.length > 0 ? strategy : undefined);
       if (res.error) throw new Error(res.error.message);
       const result = {
-        rows: (res.data ?? []) as PromptRow[],
-        total: res.count ?? 0,
+        ...countedCodeRows(res.data as PromptRow[] | null, res.count),
         strategy,
       };
       if (result.rows.length > 0 || result.total > 0) return result;
@@ -376,6 +392,26 @@ function mergeFetchLimit(page: number, limit: number): number {
   return Math.min(MAX_FETCH_LIMIT, (page + 1) * limit);
 }
 
+function pageResult(
+  entries: LibraryEntry[],
+  page: number,
+  limit: number,
+  total: number,
+  totalIsEstimate = false
+): LibraryResult {
+  const through = (page + 1) * limit;
+  return {
+    data: paginateLibraryEntries(entries, page, limit),
+    total,
+    ...(totalIsEstimate ? { totalIsEstimate: true } : {}),
+    // An estimate must never hide a full page, nor keep an exhausted/96-row
+    // merge window loading forever. A full estimated page permits one more try.
+    hasMore: through < MAX_FETCH_LIMIT && (totalIsEstimate
+      ? entries.length >= through
+      : total > through),
+  };
+}
+
 function logSourceFailure(
   source: string,
   operation: string,
@@ -416,7 +452,7 @@ async function searchCodeSource(opts: {
   search: string;
   sort: SortOption;
   useHybrid: boolean;
-}, fetchLimit: number): Promise<{ rows: PromptRow[]; total: number; strategy: string }> {
+}, fetchLimit: number): Promise<CountedCodeRows & { strategy: string }> {
   if (opts.useHybrid) {
     try {
       // Reuse the same vector for rows and count rather than paying for it twice.
@@ -446,10 +482,7 @@ export async function browseLibrary(opts: {
   if (kind === "code") {
     const code = await fetchCodeBrowse(opts.supabase, opts.sort, fetchLimit);
     const merged = mergeBrowse(code.rows, [], opts.sort);
-    return {
-      data: paginateLibraryEntries(merged, opts.page, opts.limit),
-      total: code.total,
-    };
+    return pageResult(merged, opts.page, opts.limit, code.total, code.totalIsEstimate);
   }
 
   if (kind === "website") {
@@ -459,10 +492,7 @@ export async function browseLibrary(opts: {
       fetchLimit
     );
     const merged = mergeBrowse([], website.rows, opts.sort);
-    return {
-      data: paginateLibraryEntries(merged, opts.page, opts.limit),
-      total: website.total,
-    };
+    return pageResult(merged, opts.page, opts.limit, website.total);
   }
 
   const [code, website] = await Promise.all([
@@ -481,8 +511,11 @@ export async function browseLibrary(opts: {
     opts.sort
   );
   return {
-    data: paginateLibraryEntries(merged, opts.page, opts.limit),
-    total: (code.ok ? code.value.total : 0) + (website.ok ? website.value.total : 0),
+    ...pageResult(
+      merged, opts.page, opts.limit,
+      (code.ok ? code.value.total : 0) + (website.ok ? website.value.total : 0),
+      code.ok && code.value.totalIsEstimate
+    ),
     ...(unavailable.length > 0 ? { unavailableSources: unavailable } : {}),
   };
 }
@@ -508,8 +541,7 @@ export async function searchLibrary(opts: {
     );
     const merged = mergeSearch([], website.rows, opts.search);
     return {
-      data: paginateLibraryEntries(merged, opts.page, opts.limit),
-      total: website.total,
+      ...pageResult(merged, opts.page, opts.limit, website.total),
       strategy: "website-metadata",
     };
   }
@@ -517,8 +549,7 @@ export async function searchLibrary(opts: {
   if (kind === "code") {
     const code = await searchCodeSource(opts, fetchLimit);
     return {
-      data: paginateLibraryEntries(mergeSearch(code.rows, [], opts.search), opts.page, opts.limit),
-      total: code.total,
+      ...pageResult(mergeSearch(code.rows, [], opts.search), opts.page, opts.limit, code.total, code.totalIsEstimate),
       strategy: code.strategy,
     };
   }
@@ -537,8 +568,11 @@ export async function searchLibrary(opts: {
     opts.search
   );
   return {
-    data: paginateLibraryEntries(merged, opts.page, opts.limit),
-    total: (code.ok ? code.value.total : 0) + (website.ok ? website.value.total : 0),
+    ...pageResult(
+      merged, opts.page, opts.limit,
+      (code.ok ? code.value.total : 0) + (website.ok ? website.value.total : 0),
+      code.ok && code.value.totalIsEstimate
+    ),
     strategy: code.ok ? code.value.strategy : "website-metadata",
     ...(unavailable.length > 0 ? { unavailableSources: unavailable } : {}),
   };
