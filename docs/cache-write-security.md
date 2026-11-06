@@ -5,7 +5,7 @@ Public Supabase keys are intentionally public. Generated cache content must be w
 ## Release order
 
 1. Confirm production has `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, and server-only `SUPABASE_SERVICE_ROLE_KEY`. Never print or expose credential values.
-2. Deploy this code before applying `20261106092711_restrict_cache_writes.sql`. It keeps public reads on the publishable client and moves cache generation, title/embedding backfills, and view counting to the existing privileged server client.
+2. Deploy this code before applying `20261106094932_restrict_cache_writes.sql`. It keeps public reads on the publishable client and moves cache generation, title/embedding backfills, and view counting to the existing privileged server client.
 3. Apply the migration using the authorized production database management path. It removes non-SELECT policies and write grants (including column grants) on eight generated caches and `view_log`, and limits the three view-count RPCs to the service role. Missing legacy tables/functions are skipped.
 4. Verify catalog privileges/policies, public library reads, admin backfill authorization, and normal generation/view counting. Do not poison a production row as a security test. Use a staging fixture for write-denial tests.
 
