@@ -1,4 +1,4 @@
-import { getSupabase } from "@/lib/supabase";
+import { getSupabase, getSupabaseAdmin } from "@/lib/supabase";
 
 export type WebsiteReverseMeta = {
   targetUrl: string;
@@ -52,23 +52,31 @@ export async function writeWebsiteReverse(opts: {
   designMd: string;
   prompt: string;
 }): Promise<void> {
-  const supabase = getSupabase();
+  const supabase = getSupabaseAdmin();
   if (!supabase) {
     throw new Error(
-      "Supabase not configured. Set SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY."
+      "Supabase not configured. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY."
     );
   }
 
-  const { error } = await supabase.from("website_reverse_cache").upsert(
-    {
-      slug: opts.slug,
-      target_url: opts.targetUrl,
-      design_md: opts.designMd,
-      prompt: opts.prompt,
-      cached_at: new Date().toISOString(),
-    },
-    { onConflict: "slug" }
-  );
+  const { data: existing, error: readError } = await supabase
+    .from("website_reverse_cache").select("target_url").eq("slug", opts.slug).maybeSingle();
+  if (readError) throw new Error(readError.message);
+  if (existing && existing.target_url !== opts.targetUrl) {
+    throw new Error("Website slug is already bound to a different URL.");
+  }
+  const row = {
+    slug: opts.slug,
+    target_url: opts.targetUrl,
+    design_md: opts.designMd,
+    prompt: opts.prompt,
+    cached_at: new Date().toISOString(),
+  };
+  // An insert race must fail rather than overwrite another URL's cache entry.
+  const { error } = existing
+    ? await supabase.from("website_reverse_cache").update(row)
+        .eq("slug", opts.slug).eq("target_url", opts.targetUrl)
+    : await supabase.from("website_reverse_cache").insert(row);
 
   if (error) {
     throw new Error(error.message);

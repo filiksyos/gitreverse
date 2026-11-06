@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSupabase } from "@/lib/supabase";
+import { getSupabaseAdmin } from "@/lib/supabase";
 import { backfillPromptTitles } from "@/lib/prompt-cache-title";
 
 export const dynamic = "force-dynamic";
@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 
-  const supabase = getSupabase();
+  const supabase = getSupabaseAdmin();
   if (!supabase) {
     return NextResponse.json({ error: "Database unavailable." }, { status: 503 });
   }

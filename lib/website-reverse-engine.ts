@@ -140,6 +140,9 @@ export async function ensureWebsiteReversed(opts: {
   if (!force) {
     const cached = await readWebsiteReverse(slug);
     if (cached) {
+      if (cached.meta.targetUrl !== targetUrl) {
+        return { ok: false, error: "Website slug is already bound to a different URL.", status: 409 };
+      }
       const prompt = appendDesignSystemLink(cached.meta.prompt, slug);
       if (prompt !== cached.meta.prompt) {
         // Heal stale design-system URLs in the cache (api → /designs, etc.)

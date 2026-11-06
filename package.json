@@ -10,7 +10,8 @@
     "lint": "eslint",
     "test:titles": "node --env-file=.env.local scripts/test-titles.mjs",
     "db:migrate:title": "node --env-file=.env.local scripts/apply-title-migration.mjs",
-    "test:library": "node --import tsx --test tests/library-*.test.ts"
+    "test:library": "node --import tsx --test tests/library-*.test.ts",
+    "test:cache-security": "node --conditions=react-server --import tsx --test tests/cache-security*.test.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.101.1",
@@ -20,6 +21,7 @@
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "react-markdown": "^10.1.0",
+    "server-only": "0.0.1",
     "stripe": "^17.7.0",
     "undici": "^8.1.0",
     "zod": "^4.4.3"
@@ -33,6 +35,7 @@
     "eslint-config-next": "16.2.1",
     "tailwindcss": "^4",
     "tsx": "4.23.15",
-    "typescript": "^5"
+    "typescript": "^5",
+    "@electric-sql/pglite": "0.5.15"
   }
 }

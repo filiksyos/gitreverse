@@ -3,7 +3,7 @@ import {
   isValidGitHubRepoPath,
   normalizeRepoSegment,
 } from "@/lib/parse-github-repo";
-import { getSupabase } from "@/lib/supabase";
+import { getSupabaseAdmin } from "@/lib/supabase";
 import {
   hashVisitorIp,
   isDefaultIpHashSaltInProduction,
@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid owner or repo." }, { status: 400 });
   }
 
-  const supabase = getSupabase();
+  const supabase = getSupabaseAdmin();
   if (!supabase) {
     return NextResponse.json({ error: "Database unavailable." }, { status: 503 });
   }
