@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { PGlite } from "@electric-sql/pglite";
 
-const migration = readFileSync("supabase/migrations/20261106092711_restrict_cache_writes.sql", "utf8");
+const migration = readFileSync("supabase/migrations/20261106094932_restrict_cache_writes.sql", "utf8");
 const tables = ["prompt_cache", "custom_prompt_cache", "deep_report_cache", "website_reverse_cache", "website_swap_cache", "profile_reverse_cache", "game_reverse_cache", "object3d_reverse_cache", "view_log"];
 
 test("migration blocks anonymous and signed-in writes but retains reads and trusted writes", async () => {
