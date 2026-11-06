@@ -24,6 +24,10 @@ export type LibraryResult = {
   data: LibraryEntry[];
   /** Count for the available sources only when unavailableSources is present. */
   total: number;
+  /** Code keyword/browse totals use planner estimates to avoid full-count timeouts. */
+  totalIsEstimate?: boolean;
+  /** Whether another page can be read within the bounded merge window. */
+  hasMore?: boolean;
   unavailableSources?: LibraryEntryKind[];
 };
 

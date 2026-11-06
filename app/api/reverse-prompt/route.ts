@@ -3,7 +3,7 @@ import { SYSTEM_PROMPT } from "@/lib/system-prompt";
 import { getFileTree, getReadme, getRepoMeta } from "@/lib/github-client";
 import { formatAsFilteredTree } from "@/lib/file-tree-formatter";
 import { parseGitHubRepoInput } from "@/lib/parse-github-repo";
-import { getSupabase } from "@/lib/supabase";
+import { getSupabase, getSupabaseAdmin } from "@/lib/supabase";
 import {
   buildAzureChatCompletionsBody,
   buildAzureOpenAiUrl,
@@ -512,7 +512,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const sb = getSupabase();
+    const sb = getSupabaseAdmin();
     if (sb) {
       void sb
         .from("prompt_cache")

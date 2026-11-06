@@ -29,6 +29,9 @@ importers:
       react-markdown:
         specifier: ^10.1.0
         version: 10.1.0(@types/react@19.2.14)(react@19.2.4)
+      server-only:
+        specifier: 0.0.1
+        version: 0.0.1
       stripe:
         specifier: ^17.7.0
         version: 17.7.0
@@ -39,6 +42,9 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
     devDependencies:
+      '@electric-sql/pglite':
+        specifier: 0.5.15
+        version: 0.5.15
       '@tailwindcss/postcss':
         specifier: ^4
         version: 4.2.2
@@ -68,6 +74,12 @@ importers:
         version: 5.9.3
 
 packages:
+
+  '@electric-sql/pglite@0.5.15':
+    resolution: {integrity: sha512-ERZWgaRTxueGV4cvL1tfpAOzFCWTXoUtbCBqnf2FhHDVs/so9eAKaanvrwWF9Dntx7BYsmFQujVQ0/B4S8Mmiw==}
+
+  server-only@0.0.1:
+    resolution: {integrity: sha512-qepMx2JxAa5jjfzxG79yPPq+8BuFToHd1hm7kI+Z4zAq1ftQiP7HcxMhDDItrbtwVeLg/cY2JnKnrcFkmiswNA==}
 
   '@alloc/quick-lru@5.2.0':
     resolution: {integrity: sha512-UrcABB+4bUrFABwbluTIBErXwvbsU/V7TZWfmbgJfbkwiBuziS9gxdODUyuiecfdGQ85jglMW6juS3+z5TsKLw==}
@@ -2451,6 +2463,10 @@ packages:
     hasBin: true
 
 snapshots:
+
+  '@electric-sql/pglite@0.5.15': {}
+
+  server-only@0.0.1: {}
 
   '@alloc/quick-lru@5.2.0': {}
 

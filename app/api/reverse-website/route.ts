@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isValidWebsiteSlug, parseWebsiteInput } from "@/lib/parse-website-input";
+import { isValidWebsiteSlug, parseWebsiteInput, urlToSlug } from "@/lib/parse-website-input";
 import {
   ensureWebsiteReversed,
   type WebsiteReverseResult,
@@ -114,6 +114,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
+  if (!body || typeof body !== "object" || Array.isArray(body) ||
+      (body.siteSlug !== undefined && typeof body.siteSlug !== "string") ||
+      (body.targetUrl !== undefined && typeof body.targetUrl !== "string")) {
+    return NextResponse.json({ error: "Invalid request." }, { status: 400 });
+  }
+
+  // Refreshes overwrite shared generated content and require explicit admin access.
+  if (body.force === true) {
+    const secret = process.env.ADMIN_SECRET?.trim();
+    if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`) {
+      return NextResponse.json({ error: "Unauthorized refresh." }, { status: 403 });
+    }
+  }
+
   const siteSlug = body.siteSlug?.trim().toLowerCase();
   if (!siteSlug || !isValidWebsiteSlug(siteSlug)) {
     return NextResponse.json(
@@ -146,6 +160,10 @@ export async function POST(request: NextRequest) {
       },
       { status: 400 }
     );
+  }
+
+  if (urlToSlug(parsed.hostname) !== siteSlug) {
+    return NextResponse.json({ error: "Website slug does not match URL." }, { status: 400 });
   }
 
   const timer = new Promise<never>((_, reject) =>

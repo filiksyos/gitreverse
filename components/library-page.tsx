@@ -32,17 +32,23 @@ function relativeTime(iso: string): string {
 type LibraryPageProps = {
   initialData: LibraryEntry[];
   initialTotal: number;
+  initialTotalIsEstimate?: boolean;
+  initialHasMore?: boolean;
   initialUnavailableSources?: LibraryEntryKind[];
   initialError?: string;
 };
 
 export function LibraryPage({
-  initialData, initialTotal, initialUnavailableSources = [], initialError,
+  initialData, initialTotal, initialTotalIsEstimate = false,
+  initialHasMore = initialData.length < initialTotal,
+  initialUnavailableSources = [], initialError,
 }: LibraryPageProps) {
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<SortOption>("newest");
   const [entries, setEntries] = useState<LibraryEntry[]>(initialData);
   const [total, setTotal] = useState(initialTotal);
+  const [totalIsEstimate, setTotalIsEstimate] = useState(initialTotalIsEstimate);
+  const [hasMore, setHasMore] = useState(initialHasMore);
   const [error, setError] = useState<string | undefined>(initialError);
   const [unavailableSources, setUnavailableSources] = useState(initialUnavailableSources);
   const requestRef = useRef(0);
@@ -91,6 +97,8 @@ export function LibraryPage({
           setEntries(json.data);
         }
         setTotal(json.total);
+        setTotalIsEstimate(json.totalIsEstimate ?? false);
+        setHasMore(json.hasMore ?? false);
         setUnavailableSources(json.unavailableSources ?? []);
         setPage(pageVal);
       } catch {
@@ -99,6 +107,8 @@ export function LibraryPage({
         if (!append) {
           setEntries([]);
           setTotal(0);
+          setTotalIsEstimate(false);
+          setHasMore(false);
           setUnavailableSources([]);
         }
       }
@@ -135,8 +145,6 @@ export function LibraryPage({
     }
   }
 
-  const hasMore = entries.length < total;
-
   return (
     <div className="flex min-h-screen flex-col bg-[#FFFDF8] text-zinc-900">
       <Navbar />
@@ -148,7 +156,7 @@ export function LibraryPage({
             <div className="absolute inset-0 translate-x-1.5 translate-y-1.5 rounded-lg bg-zinc-900" />
             <div className="relative z-10 rounded-lg border-[3px] border-zinc-900 bg-[#d31611] px-4 py-1">
               <span className="text-sm font-bold text-white">
-                {error ? "Prompt library" : `${total.toLocaleString()}+ prompts`}
+                {error ? "Prompt library" : `${totalIsEstimate ? "~" : ""}${total.toLocaleString()} prompts`}
               </span>
             </div>
           </div>
@@ -286,7 +294,7 @@ export function LibraryPage({
         {search && !error ? (
           <p className="text-sm text-zinc-500">
             <span className="font-semibold text-zinc-900">
-              {total.toLocaleString()}
+              {totalIsEstimate ? "About " : ""}{total.toLocaleString()}
             </span>{" "}
             result{total !== 1 ? "s" : ""}{unavailableSources.length > 0 ? " from available sources" : ""}
           </p>
@@ -350,7 +358,7 @@ export function LibraryPage({
                   Loading…
                 </>
               ) : (
-                <>Load {Math.min(PAGE_SIZE, total - entries.length)} more ↓</>
+                <>Load {totalIsEstimate ? "" : `${Math.min(PAGE_SIZE, total - entries.length)} `}more ↓</>
               )}
             </button>
           </div>
