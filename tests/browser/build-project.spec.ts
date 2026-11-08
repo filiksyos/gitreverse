@@ -152,9 +152,9 @@ test("server error surfaces without replacing the prompt", async ({ page }) => {
     }),
   );
   await page.getByRole("button", { name: "Build", exact: true }).click();
-  await expect(page.getByRole("alert")).toHaveText(
-    "Build preview is restricted.",
-  );
+  await expect(
+    page.getByRole("alert").filter({ hasText: "Build preview is restricted." }),
+  ).toHaveText("Build preview is restricted.");
   await expect(page.getByText(prompt, { exact: true })).toBeVisible();
 });
 
@@ -233,4 +233,23 @@ test("sign-out clears the built project", async ({ page }) => {
   await expect(
     page.getByRole("button", { name: "Sign in to build" }),
   ).toBeVisible();
+});
+
+test("small screens keep build actions inside the viewport", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await setup(page);
+  await page.getByRole("button", { name: "Build", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Download ZIP" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Create private GitHub repo" }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
 });
