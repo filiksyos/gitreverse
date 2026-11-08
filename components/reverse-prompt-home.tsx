@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import { CodeRabbitBanner } from "@/components/coderabbit-banner";
+import { BuildProjectActions } from "@/components/build-project-actions";
 import { Navbar } from "@/components/navbar";
 import { ReverseGenerationFlavorText } from "@/components/reverse-generation-flavor-text";
 import { useAuth } from "@/contexts/AuthContext";
@@ -532,6 +533,7 @@ export function ReversePromptHome({
                   Reverse engineered prompt
                 </h2>
                 <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                  <BuildProjectActions prompt={prompt} />
                   <div className="group relative">
                     <div className="absolute inset-0 translate-x-0.5 translate-y-0.5 rounded bg-zinc-900" />
                     <button
