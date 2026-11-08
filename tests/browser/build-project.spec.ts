@@ -247,9 +247,23 @@ test("small screens keep build actions inside the viewport", async ({
   await expect(
     page.getByRole("button", { name: "Create private GitHub repo" }),
   ).toBeVisible();
+  const overflow = await page.evaluate(() =>
+    Array.from(document.querySelectorAll("body *"))
+      .filter((el) => {
+        const box = el.getBoundingClientRect();
+        return box.width > 0 && box.right > window.innerWidth + 1;
+      })
+      .map((el) => ({
+        tag: el.tagName,
+        className: el.className,
+        text: el.textContent?.slice(0, 60),
+      }))
+      .slice(0, 8),
+  );
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= window.innerWidth,
     ),
+    JSON.stringify(overflow),
   ).toBe(true);
 });

@@ -145,7 +145,7 @@ function BuildProjectFlow({ prompt }: { prompt: string }) {
   }
   return (
     <div
-      className="flex max-w-full flex-wrap items-center justify-end gap-2"
+      className="flex min-w-0 max-w-full flex-wrap items-center justify-end gap-2"
       aria-busy={busy}
     >
       {!project ? (
@@ -180,7 +180,7 @@ function BuildProjectFlow({ prompt }: { prompt: string }) {
               Open repository
             </a>
           )}
-          <details className="w-full text-xs text-zinc-600">
+          <details className="w-full min-w-0 break-words text-xs text-zinc-600">
             <summary className="cursor-pointer">
               {project.files.length} generated files · not run or tested
             </summary>
@@ -208,7 +208,7 @@ function BuildProjectFlow({ prompt }: { prompt: string }) {
         </button>
       )}
       {needsPermission && (
-        <div className="w-full text-xs text-zinc-600">
+        <div className="w-full min-w-0 break-words text-xs text-zinc-600">
           <p>
             GitHub’s repo permission can access your repositories. Connect only
             if you accept that scope. GitReverse uses it here to create a new
