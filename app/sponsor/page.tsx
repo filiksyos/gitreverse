@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { unstable_cache } from "next/cache";
 import { getSupabaseAdmin } from "@/lib/supabase";
-import { ownerTrafficSnapshot, parseSponsorTraffic } from "@/lib/sponsorship-analytics";
+import { parseSponsorTraffic } from "@/lib/sponsorship-analytics";
 import { PartnerPage } from "@/components/partner-page";
 
 export const metadata: Metadata = {
@@ -41,5 +41,5 @@ export default async function PartnerRoute({ searchParams }: PartnerRouteProps) 
 
   const now = new Date();
   const traffic = parseSponsorTraffic(await getCachedAudience(), now);
-  return <PartnerPage checkoutStatus={checkoutStatus} traffic={traffic ?? ownerTrafficSnapshot(now)} liveTraffic={traffic !== null} />;
+  return <PartnerPage checkoutStatus={checkoutStatus} traffic={traffic} />;
 }
