@@ -1,9 +1,11 @@
 import { Navbar } from "@/components/navbar";
 import { PartnerCheckoutForm } from "@/components/partner-checkout-form";
 import { SPONSOR_CONTACT, sponsorshipMonthLabel } from "@/lib/sponsorship-config";
-import { formatMonthlyVisitors, trafficPeriodLabel, type SponsorTraffic } from "@/lib/sponsorship-analytics";
+import { formatMonthlyVisitors, ownerTrafficSnapshot, snapshotReportedMonth, trafficPeriodLabel, type SponsorTraffic } from "@/lib/sponsorship-analytics";
 
-export function PartnerPage({ checkoutStatus, traffic = null, liveTraffic = false }: { checkoutStatus?: "success" | "cancelled"; traffic?: SponsorTraffic | null; liveTraffic?: boolean }) {
+export function PartnerPage({ checkoutStatus, traffic = null }: { checkoutStatus?: "success" | "cancelled"; traffic?: SponsorTraffic | null }) {
+  const snapshot = ownerTrafficSnapshot();
+  const snapshotMonth = snapshotReportedMonth(snapshot);
   const monthLabel = sponsorshipMonthLabel(new Date());
   return (
     <div className="flex min-h-screen flex-col bg-[#FFFDF8] text-zinc-900">
@@ -15,9 +17,9 @@ export function PartnerPage({ checkoutStatus, traffic = null, liveTraffic = fals
           <p className="mt-5 max-w-xl text-base leading-relaxed text-zinc-600">A small, clearly labeled spot for your product, where developers reverse-engineer codebases and websites.</p>
           <dl className="mt-8 grid max-w-lg grid-cols-2 gap-6">
             <div><dd className="text-3xl font-bold tracking-tight sm:text-4xl">250K+</dd><dt className="mt-1 text-sm text-zinc-600">Lifetime visitors</dt></div>
-            <div title={traffic ? `${trafficPeriodLabel(traffic)}. Returning visitors may count again on different days.` : "Monthly traffic is temporarily unavailable."}><dd className="text-3xl font-bold tracking-tight sm:text-4xl">{traffic ? formatMonthlyVisitors(traffic.visitors) : "—"}</dd><dt className="mt-1 text-sm text-zinc-600">visitors last month</dt></div>
+            <div title={traffic ? `${trafficPeriodLabel(traffic)}. Returning visitors may count again on different days.` : `Owner-reported monthly audience, supplied ${snapshotMonth}.`}><dd className="text-3xl font-bold tracking-tight sm:text-4xl">{formatMonthlyVisitors(traffic?.visitors ?? snapshot.visitors)}</dd><dt className="mt-1 text-sm text-zinc-600">{traffic ? "visitors last month" : "Monthly visitors"}</dt></div>
           </dl>
-          <p className="mt-3 text-xs text-zinc-400">{liveTraffic ? "Monthly traffic updates hourly" : traffic ? "Audience snapshot · October 2026" : "Monthly traffic temporarily unavailable"}</p>
+          <p className="mt-3 text-xs text-zinc-400">{traffic ? "Monthly traffic updates hourly" : `Audience snapshot · ${snapshotMonth}`}</p>
         </header>
         <section aria-label="Previous sponsors" className="my-10 border-y border-zinc-200 py-5">
           <p className="text-xs text-zinc-500">Previous sponsors</p>

@@ -12,19 +12,20 @@ export function previousCalendarMonth(now: Date) {
   };
 }
 
-/** The owner supplied this historical snapshot; it is never rolled into a different month. */
-export function ownerTrafficSnapshot(now: Date): SponsorTraffic | null {
-  const { start } = previousCalendarMonth(now);
-  return start.toISOString() === "2026-09-01T00:00:00.000Z" ? {
-    visitors: 35000,
-    periodStart: "2026-09-01T00:00:00.000Z",
-    periodEnd: "2026-10-01T00:00:00.000Z",
-    measuredAt: "2026-10-08T07:32:00.000Z",
-  } : null;
+/** Owner-reported monthly audience, dated when supplied rather than assigned an unverified period. */
+export function ownerTrafficSnapshot() {
+  return {
+    visitors: 44256,
+    reportedAt: "2026-11-09T00:00:00.000Z",
+  };
 }
 
 export function formatMonthlyVisitors(visitors: number) {
-  return new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 0 }).format(visitors);
+  return new Intl.NumberFormat("en-US").format(visitors);
+}
+
+export function snapshotReportedMonth(snapshot: ReturnType<typeof ownerTrafficSnapshot>) {
+  return new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(snapshot.reportedAt));
 }
 
 export function trafficPeriodLabel(traffic: SponsorTraffic) {
