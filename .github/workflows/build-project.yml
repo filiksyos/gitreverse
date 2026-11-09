@@ -1,0 +1,44 @@
+name: Build project experiment regressions
+
+on:
+  pull_request:
+    paths:
+      - 'lib/build-project/**'
+      - 'app/api/build-project/**'
+      - 'components/build-project-actions.tsx'
+      - 'components/reverse-prompt-home.tsx'
+      - 'components/website-reverse-page.tsx'
+      - 'contexts/AuthContext.tsx'
+      - 'tests/build-project*.test.ts'
+      - 'tests/browser/build-project.spec.ts'
+      - 'playwright.build.config.ts'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/build-project.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build-project:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.11.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test:build-project
+      - run: pnpm test:cache-security
+      - run: pnpm exec tsc --noEmit
+      - run: pnpm exec eslint components/build-project-actions.tsx lib/build-project app/api/build-project tests/build-project.test.ts tests/browser/build-project.spec.ts playwright.build.config.ts
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:build-browser
