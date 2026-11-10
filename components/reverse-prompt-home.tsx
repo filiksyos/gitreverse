@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import { CodeRabbitBanner } from "@/components/coderabbit-banner";
+import { VideoReverseDownload } from "@/components/video-reverse-download";
 import { Navbar } from "@/components/navbar";
 import { ReverseGenerationFlavorText } from "@/components/reverse-generation-flavor-text";
 import { useAuth } from "@/contexts/AuthContext";
@@ -46,7 +47,7 @@ export function ReversePromptHome({
   const { isAuthenticated, session } = useAuth();
   const [repoUrl, setRepoUrl] = useState(initialRepoInput);
   const [siteUrl, setSiteUrl] = useState("");
-  const [homeMode, setHomeMode] = useState<"codebase" | "website">("codebase");
+  const [homeMode, setHomeMode] = useState<"codebase" | "website" | "video">("codebase");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [rateLimited, setRateLimited] = useState(false);
@@ -59,8 +60,9 @@ export function ReversePromptHome({
   useEffect(() => {
     if (!isHome || typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
-    if (params.get("mode")?.trim().toLowerCase() === "website") {
-      setHomeMode("website");
+    const mode = params.get("mode")?.trim().toLowerCase();
+    if (mode === "website" || mode === "video") {
+      setHomeMode(mode);
     }
   }, [isHome]);
 
@@ -110,13 +112,13 @@ export function ReversePromptHome({
     }
   }, []);
 
-  function setHomeModeAndUrl(next: "codebase" | "website") {
+  function setHomeModeAndUrl(next: "codebase" | "website" | "video") {
     setHomeMode(next);
     setError(null);
     if (typeof window === "undefined" || !isHome) return;
     const url = new URL(window.location.href);
-    if (next === "website") {
-      url.searchParams.set("mode", "website");
+    if (next !== "codebase") {
+      url.searchParams.set("mode", next);
     } else {
       url.searchParams.delete("mode");
     }
@@ -325,7 +327,6 @@ export function ReversePromptHome({
                 type="button"
                 role="tab"
                 aria-selected={homeMode === "codebase"}
-                aria-pressed={homeMode === "codebase"}
                 onClick={() => setHomeModeAndUrl("codebase")}
                 className={`border-r-[2.5px] border-zinc-900 px-5 py-2.5 text-sm font-bold transition-colors ${
                   homeMode === "codebase"
@@ -339,7 +340,6 @@ export function ReversePromptHome({
                 type="button"
                 role="tab"
                 aria-selected={homeMode === "website"}
-                aria-pressed={homeMode === "website"}
                 onClick={() => setHomeModeAndUrl("website")}
                 className={`px-5 py-2.5 text-sm font-bold transition-colors ${
                   homeMode === "website"
@@ -349,9 +349,19 @@ export function ReversePromptHome({
               >
                 Website
               </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={homeMode === "video"}
+                onClick={() => setHomeModeAndUrl("video")}
+                className={`border-l-[2.5px] border-zinc-900 px-5 py-2.5 text-sm font-bold transition-colors ${homeMode === "video" ? "bg-[#d31611] text-white" : "bg-transparent text-zinc-600 hover:bg-zinc-50"}`}
+              >
+                Video Reverse
+              </button>
             </div>
           ) : null}
 
+          {isHome && homeMode === "video" ? <VideoReverseDownload /> : (
           <div className="flex w-full max-w-2xl flex-col gap-3">
             <div className="relative w-full">
               <div className="absolute inset-0 translate-x-2 translate-y-2 rounded-xl bg-zinc-900" />
@@ -517,6 +527,7 @@ export function ReversePromptHome({
               </p>
             ) : null}
           </div>
+          )}
         </div>
 
         {prompt ? (

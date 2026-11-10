@@ -88,3 +88,7 @@ pnpm test:library
 GitReverse's source code is licensed under the [MIT License](LICENSE).
 
 Third-party dependencies and assets retain their respective licenses and rights. See the [sponsor asset sources](public/sponsors/SOURCES.md) for the existing brand-asset notices.
+
+### Instagram reel downloads
+
+Set `SEARCHAPI_API_KEY` in `.env.local` (and your deployment environment). On the home page, select **Video Reverse**, paste a public Instagram reel URL, and click **Download Reel**. The video is downloaded as an MP4; prompt generation for video is not implemented yet. `/?mode=video` opens this mode directly. The API key stays on the server.
