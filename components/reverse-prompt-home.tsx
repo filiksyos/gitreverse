@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
-import { CodeRabbitBanner } from "@/components/coderabbit-banner";
+import { GitGtaBanner } from "@/components/gitgta-promotion";
 import { Navbar } from "@/components/navbar";
 import { ReverseGenerationFlavorText } from "@/components/reverse-generation-flavor-text";
 import { useAuth } from "@/contexts/AuthContext";
@@ -606,7 +606,7 @@ export function ReversePromptHome({
                 </ReactMarkdown>
               </div>
               {!loading && (!isHome || homeMode === "codebase") ? (
-                <CodeRabbitBanner
+                <GitGtaBanner
                   className="mt-4 w-full"
                   embedded
                   placement="repo-card"
