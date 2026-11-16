@@ -2,8 +2,16 @@
 
 import { useEffect, useRef } from "react";
 import { track } from "@vercel/analytics";
+import { useParams } from "next/navigation";
 
-const GITGTA_URL = "https://gitgta.com/?utm_source=gitreverse&utm_medium=referral";
+function useGitGtaUrl() {
+  const params = useParams();
+  const owner = typeof params.owner === "string" && typeof params.repo === "string"
+    ? params.owner
+    : undefined;
+  const validOwner = owner && /^[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,37}[a-zA-Z0-9])?$/.test(owner);
+  return `https://gitgta.com/${validOwner ? encodeURIComponent(owner) : ""}?utm_source=gitreverse&utm_medium=referral`;
+}
 
 type BannerProps = {
   className?: string;
@@ -12,9 +20,10 @@ type BannerProps = {
 };
 
 export function GitGtaBanner({ className = "", embedded = false, placement = "repo-card" }: BannerProps) {
+  const gitGtaUrl = useGitGtaUrl();
   return (
     <a
-      href={GITGTA_URL}
+      href={gitGtaUrl}
       target="_blank"
       rel="noopener noreferrer"
       onClick={() => track("GitGTA Click", { placement })}
@@ -33,6 +42,7 @@ export function GitGtaBanner({ className = "", embedded = false, placement = "re
 
 export function GitGtaPromotionModal() {
   const dialog = useRef<HTMLDialogElement>(null);
+  const gitGtaUrl = useGitGtaUrl();
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -63,7 +73,7 @@ export function GitGtaPromotionModal() {
         <span aria-hidden="true" className="mb-4 block text-5xl">🌴</span>
         <h2 id="gitgta-promotion-title" className="text-3xl font-black leading-tight">Your GitHub.<br />Welcome to Vice City.</h2>
         <p id="gitgta-promotion-description" className="mt-4 text-base leading-relaxed text-zinc-600">We built a way to turn any GitHub profile into a GTA VI game.</p>
-        <a href={GITGTA_URL} onClick={() => track("GitGTA Click", { placement: "arrival-modal" })} className="mt-6 block rounded-lg border-2 border-zinc-900 bg-[#f9a8d4] px-5 py-3 text-center font-bold transition-colors hover:bg-[#f472b6] focus-visible:outline-2 focus-visible:outline-offset-4">Try GitGTA →</a>
+        <a href={gitGtaUrl} onClick={() => track("GitGTA Click", { placement: "arrival-modal" })} className="mt-6 block rounded-lg border-2 border-zinc-900 bg-[#f9a8d4] px-5 py-3 text-center font-bold transition-colors hover:bg-[#f472b6] focus-visible:outline-2 focus-visible:outline-offset-4">Try GitGTA →</a>
         <button type="button" onClick={() => dialog.current?.close()} className="mx-auto mt-4 block rounded px-3 py-2 text-sm text-zinc-600 hover:text-zinc-900">Maybe later</button>
       </div>
     </dialog>
