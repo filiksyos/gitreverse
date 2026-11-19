@@ -49,3 +49,7 @@ next-env.d.ts
 
 # caddy azure deploy spec (contains storage keys / ACR passwords)
 caddy/aci.yaml
+
+# Browser regression artifacts
+/test-results/
+/playwright-report/

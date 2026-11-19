@@ -24,6 +24,7 @@ export type AuthContextValue = {
   /** True when signed in, or when auth is skipped / misconfigured per policy. */
   isAuthenticated: boolean;
   signInWithGitHub: () => Promise<void>;
+  signInWithGitHubForExport: () => Promise<void>;
   signOut: () => Promise<void>;
 };
 
@@ -63,7 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
-  const signInWithGitHub = useCallback(async () => {
+  const signInWithScopes = useCallback(async (scopes: string) => {
     if (AUTH_DISABLED) return;
 
     const supabase = getSupabaseAuthClient();
@@ -80,7 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       options: {
         redirectTo,
         skipBrowserRedirect: true,
-        scopes: "read:user user:email",
+        scopes,
       },
     });
 
@@ -97,6 +98,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       window.location.href = data.url;
     }
   }, []);
+
+  const signInWithGitHub = useCallback(() => signInWithScopes("read:user user:email"), [signInWithScopes]);
+  // Only invoked by the explicit private-repository export permission button.
+  const signInWithGitHubForExport = useCallback(() => signInWithScopes("read:user user:email repo"), [signInWithScopes]);
 
   const signOut = useCallback(async () => {
     if (AUTH_DISABLED) return;
@@ -116,9 +121,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isLoading,
       isAuthenticated,
       signInWithGitHub,
+      signInWithGitHubForExport,
       signOut,
     }),
-    [user, session, isLoading, isAuthenticated, signInWithGitHub, signOut]
+    [user, session, isLoading, isAuthenticated, signInWithGitHub, signInWithGitHubForExport, signOut]
   );
 
   return (

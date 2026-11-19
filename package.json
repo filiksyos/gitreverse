@@ -11,7 +11,9 @@
     "test:titles": "node --env-file=.env.local scripts/test-titles.mjs",
     "db:migrate:title": "node --env-file=.env.local scripts/apply-title-migration.mjs",
     "test:library": "node --import tsx --test tests/library-*.test.ts",
-    "test:cache-security": "node --conditions=react-server --import tsx --test tests/cache-security*.test.ts"
+    "test:cache-security": "node --conditions=react-server --import tsx --test tests/cache-security*.test.ts",
+    "test:build-project": "node --conditions=react-server --import tsx --test tests/build-project*.test.ts",
+    "test:build-browser": "playwright test --config=playwright.build.config.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.101.1",
@@ -27,6 +29,8 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.5.15",
+    "@playwright/test": "1.58.2",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
@@ -35,7 +39,6 @@
     "eslint-config-next": "16.2.1",
     "tailwindcss": "^4",
     "tsx": "4.23.15",
-    "typescript": "^5",
-    "@electric-sql/pglite": "0.5.15"
+    "typescript": "^5"
   }
 }
